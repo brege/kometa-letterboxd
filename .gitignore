@@ -1,0 +1,6 @@
+# user data
+config.y*ml
+
+# python matter
+__pycache__
+*.pyc

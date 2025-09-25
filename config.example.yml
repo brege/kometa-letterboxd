@@ -1,0 +1,17 @@
+# Copy to a writable location (for example, config.yml) and adjust values.
+
+username: your-letterboxd-username
+request_timeout: 30
+
+dated:
+  kometa_target: /path/to/kometa/config.yml
+  letterboxd_prefix: "Movie Night - "
+  plex_prefix: "Martin's Movie Night - "
+  days_before: 0
+
+tagged:
+  tag: plex
+
+showdown:
+  enabled: false
+  tournaments: []
