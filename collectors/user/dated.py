@@ -1,6 +1,12 @@
 """Helpers for generating dated Letterboxd collections."""
 
+from __future__ import annotations
+
 import datetime
+from typing import Mapping
+
+from common.kometa import build_collection_entry
+from .lists import to_letterboxd_url
 
 
 def parse_dated_list_title(title, prefix):
@@ -49,7 +55,13 @@ def get_dated_lists(all_lists, prefix, days_before=0):
 
 
 def generate_dated_collections(
-    dated_lists, dated_list_prefix, new_collection_prefix, days_before=0
+    dated_lists,
+    dated_list_prefix,
+    new_collection_prefix,
+    days_before=0,
+    *,
+    entry_extra: Mapping[str, object] | None = None,
+    extended_extra: Mapping[str, object] | None = None,
 ):
     collections = {}
     current_date = datetime.date.today()
@@ -82,15 +94,18 @@ def generate_dated_collections(
             else:
                 print(f"- Setting '{collection_title}' to hidden")
 
-            collections[collection_title] = {
-                "letterboxd_list": f"https://letterboxd.com{url_suffix}",
-                "collection_order": "custom",
-                "sort_title": sort_title,
-                "sync_mode": "sync",
-                "visible_library": is_current,
-                "visible_home": is_current,
-                "visible_shared": is_current,
-            }
+            extra_payload = (
+                dict(entry_extra) if isinstance(entry_extra, Mapping) else {}
+            )
+
+            collections[collection_title] = build_collection_entry(
+                to_letterboxd_url(url_suffix),
+                sort_title=sort_title,
+                visible_library=is_current,
+                visible_home=is_current,
+                visible_shared=is_current,
+                extra=extra_payload,
+            )
 
     all_months_title = (
         f"{new_collection_prefix} Extended Edition"
@@ -102,17 +117,19 @@ def generate_dated_collections(
 
     extended_sort_title = f"{current_date.year}-99 {all_months_title}"
 
+    extended_payload = (
+        dict(extended_extra) if isinstance(extended_extra, Mapping) else {}
+    )
+
     print(f"\nPreparing '{all_months_title}' collection for config...")
-    collections[all_months_title] = {
-        "letterboxd_list": [
-            f"https://letterboxd.com{url_suffix}" for _, url_suffix in dated_lists
-        ],
-        "collection_order": "release.desc",
-        "sort_title": extended_sort_title,
-        "sync_mode": "sync",
-        "visible_library": True,
-        "visible_home": False,
-        "visible_shared": False,
-    }
+    collections[all_months_title] = build_collection_entry(
+        [to_letterboxd_url(url_suffix) for _, url_suffix in dated_lists],
+        sort_title=extended_sort_title,
+        collection_order="release.desc",
+        visible_library=True,
+        visible_home=False,
+        visible_shared=False,
+        extra=extended_payload,
+    )
 
     return collections

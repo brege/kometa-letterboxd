@@ -2,15 +2,23 @@
 
 username: your-letterboxd-username
 request_timeout: 30
+lists_cache: data/letterboxd_lists.json
+refresh_lists: false
 
 dated:
   kometa_target: /path/to/kometa/config.yml
   letterboxd_prefix: "Movie Night - "
   plex_prefix: "Martin's Movie Night - "
   days_before: 0
+  collection_extra:
+    label.not: "Film Club"
+  extended_extra:
+    summary: "Auto-generated roundup"
 
 tagged:
   tag: plex
+  extra:
+    label.not: "Film Club"
 
 showdown:
   showdown_json: path/to/showdown.json
