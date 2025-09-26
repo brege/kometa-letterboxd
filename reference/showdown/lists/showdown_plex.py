@@ -224,9 +224,7 @@ def run_showdown_from_config(
     showdown_json_path = resolve_path(showdown_json_raw, base_dir)
 
     manifest_raw = showdown_config.get("manifest_output")
-    manifest_output = (
-        resolve_path(manifest_raw, base_dir) if manifest_raw else None
-    )
+    manifest_output = resolve_path(manifest_raw, base_dir) if manifest_raw else None
 
     state_raw = showdown_config.get("state_file")
     state_path = resolve_path(state_raw, base_dir) if state_raw else None
@@ -508,9 +506,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:  # pragma: no cover - CL
         else None
     )
     state_path = (
-        resolve_path(args.state_file, config_path.parent)
-        if args.state_file
-        else None
+        resolve_path(args.state_file, config_path.parent) if args.state_file else None
     )
 
     run_showdown_job(

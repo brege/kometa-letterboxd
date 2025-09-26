@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import re
-import time
 from typing import List, Optional, Sequence, Tuple
 
 import requests
 from bs4 import BeautifulSoup
 
 
-def fetch_user_lists(username: str, timeout: int) -> Optional[List[Tuple[str, str, Sequence[str]]]]:
+def fetch_user_lists(
+    username: str, timeout: int
+) -> Optional[List[Tuple[str, str, Sequence[str]]]]:
     lists: List[Tuple[str, str, Sequence[str]]] = []
     page = 1
 
@@ -52,10 +53,6 @@ def fetch_user_lists(username: str, timeout: int) -> Optional[List[Tuple[str, st
         lists.extend(page_lists)
         print(f"Found {len(page_lists)} lists on page {page}")
         page += 1
-
-        # Letterboxd rate-limits bursts of requests. Pause briefly between pages
-        # so subsequent calls do not trigger HTTP 429 responses.
-        time.sleep(1)
 
     print(f"Total found: {len(lists)} lists across {page - 1} pages.")
     return lists

@@ -141,7 +141,9 @@ def main():
             generator=Path(__file__).name,
             config_source=config_path,
         )
-        print(f"\nKometa config file {kometa_destination} has been updated successfully.")
+        print(
+            f"\nKometa config file {kometa_destination} has been updated successfully."
+        )
     except Exception as exc:
         print(
             f"Error updating Kometa config file {kometa_destination}: {exc}",
