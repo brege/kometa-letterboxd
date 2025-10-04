@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-import json
+import requests
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
@@ -27,6 +27,8 @@ from common.plex import (
     count_available_tmdb_ids,
     resolve_plex_config,
 )
+from .probe import refresh_showdown_cache
+from .storage import load_showdown_datasets, load_state, resolve_path, save_state
 
 DEFAULT_THRESHOLD = 4
 DEFAULT_SORT_MODE = "matches_desc"
@@ -74,7 +76,7 @@ def generate_showdown_collections(
     if not showdown_config:
         return {}, None
 
-    showdown_path = _resolve_path(showdown_config.get("showdown_json"), base_path)
+    showdown_path = resolve_path(showdown_config.get("showdown_json"), base_path)
     if not showdown_path:
         print("Showdown: no dataset path configured; skipping showdown collections.")
         return {}, None
@@ -82,7 +84,7 @@ def generate_showdown_collections(
         print(f"Showdown dataset not found at {showdown_path}; skipping generation.")
         return {}, None
 
-    datasets = _load_showdown_datasets(showdown_path)
+    datasets = load_showdown_datasets(showdown_path)
     if not datasets:
         print("Showdown dataset contained no entries; skipping generation.")
         return {}, None
@@ -118,25 +120,31 @@ def generate_showdown_collections(
     if window <= 0:
         print("Showdown: window size must be positive; skipping generation.")
         return {}, None
-    selected = ordered[:window]
-    if not selected:
-        print("Showdown: no datasets selected after applying window.")
-        return {}, None
 
-    state_path = _resolve_path(showdown_config.get("state_file"), base_path)
+    state_path = resolve_path(showdown_config.get("state_file"), base_path)
     if not state_path:
         state_path = (base_path / DEFAULT_STATE_FILE).resolve()
 
-    spotlight = _select_spotlight(selected, state_path)
+    # Calculate sliding window based on spotlight progression
+    selected, spotlight = _select_sliding_window_and_spotlight(
+        ordered, window, state_path
+    )
     label = str(showdown_config.get("label", DEFAULT_LABEL))
 
-    collections = _build_collections(selected, spotlight, label)
+    collections = _build_collections(selected, datasets, tmdb_index, spotlight, label)
 
-    destination_path = _resolve_path(
+    # Download background images to asset directory if configured
+    asset_directory_config = showdown_config.get("asset_directory")
+    if asset_directory_config:
+        asset_path = resolve_path(asset_directory_config, base_path)
+        if asset_path:
+            _download_background_images(collections, datasets, asset_path)
+
+    destination_path = resolve_path(
         showdown_config.get("kometa_destination"), base_path
     )
 
-    manifest_path = _resolve_path(showdown_config.get("manifest_output"), base_path)
+    manifest_path = resolve_path(showdown_config.get("manifest_output"), base_path)
     if manifest_path:
         _write_manifest(
             manifest_path,
@@ -148,37 +156,6 @@ def generate_showdown_collections(
         )
 
     return collections, destination_path
-
-
-def _resolve_path(raw: Any, base_path: Path) -> Optional[Path]:
-    if not raw:
-        return None
-    candidate = Path(str(raw)).expanduser()
-    if not candidate.is_absolute():
-        candidate = (base_path / candidate).resolve()
-    return candidate
-
-
-def _load_showdown_datasets(path: Path) -> List[Mapping[str, Any]]:
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"Showdown: unable to read dataset {path}: {exc}")
-        return []
-
-    if isinstance(payload, dict) and "showdowns" in payload:
-        payload = payload.get("showdowns")
-
-    if not isinstance(payload, Sequence):
-        print("Showdown: unexpected dataset structure; expected a list of items.")
-        return []
-
-    datasets: List[Mapping[str, Any]] = []
-    for item in payload:
-        if isinstance(item, Mapping):
-            datasets.append(item)
-    return datasets
 
 
 def _evaluate_datasets(
@@ -246,98 +223,200 @@ def _availability_sort_key(item: ShowdownAvailability) -> Any:
     return (item.match_ratio, item.available_entries, published, item.title)
 
 
-def _select_spotlight(
+def _select_sliding_window_and_spotlight(
     ordered: Sequence[ShowdownAvailability],
+    window: int,
     state_path: Path,
-) -> Optional[ShowdownAvailability]:
+) -> Tuple[List[ShowdownAvailability], Optional[ShowdownAvailability]]:
     if not ordered:
-        return None
+        return [], None
 
-    state = _load_state(state_path)
-    seen = [slug for slug in state.get("seen", []) if slug]
-    pool = {item.slug for item in ordered}
-    seen = [slug for slug in seen if slug in pool]
+    if window <= 0:
+        return [], None
 
-    spotlight: Optional[ShowdownAvailability] = None
-    for item in ordered:
-        if item.slug not in seen:
-            spotlight = item
-            break
+    # Load state to get current window position
+    state = load_state(state_path)
+    current_position = state.get("window_position", 0)
 
-    if spotlight is None:
-        spotlight = ordered[0]
-        seen = []
+    # Ensure position is valid
+    if current_position < 0 or current_position >= len(ordered):
+        current_position = 0
 
-    if spotlight.slug in seen:
-        seen.remove(spotlight.slug)
-    seen.append(spotlight.slug)
+    # Calculate window bounds
+    window_start = current_position
+    window_end = min(current_position + window, len(ordered))
 
-    state["seen"] = seen[-20:]
-    _save_state(state_path, state)
-    return spotlight
+    # Extract window of collections
+    selected = list(ordered[window_start:window_end])
 
+    # Spotlight is always position 3 (center) of window, or middle if window < 5
+    spotlight_index = min(2, len(selected) // 2) if selected else 0
+    spotlight = selected[spotlight_index] if spotlight_index < len(selected) else None
 
-def _load_state(path: Path) -> Dict[str, Any]:
-    if not path.exists():
-        return {"seen": []}
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return {"seen": []}
-    if not isinstance(data, dict):
-        return {"seen": []}
-    seen = data.get("seen", [])
-    if not isinstance(seen, list):
-        seen = []
-    filtered = [slug for slug in seen if isinstance(slug, str) and slug]
-    return {"seen": filtered}
+    # Advance window position for next run
+    next_position = current_position + 1
+    if next_position >= len(ordered):
+        # Reset to beginning when we've gone through all collections
+        next_position = 0
 
+    # Save new position
+    state["window_position"] = next_position
+    save_state(state_path, state)
 
-def _save_state(path: Path, data: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(
-            {"seen": list(data.get("seen", []))}, handle, indent=2, sort_keys=True
-        )
+    return selected, spotlight
 
 
 def _build_collections(
     availability: Sequence[ShowdownAvailability],
+    datasets: Iterable[Mapping[str, Any]],
+    tmdb_index: Iterable[str],
     spotlight: Optional[ShowdownAvailability],
     label: str,
 ) -> Dict[str, MutableMapping[str, Any]]:
     collections: Dict[str, MutableMapping[str, Any]] = {}
     spotlight_slug = spotlight.slug if spotlight else None
 
-    for index, item in enumerate(availability):
-        percent = 0
-        if item.total_entries > 0:
-            percent = int(round((item.available_entries / item.total_entries) * 100))
+    # Create a mapping from slug to available TMDB IDs
+    index_set = {str(tmdb_id) for tmdb_id in tmdb_index}
+    slug_to_tmdb_ids = {}
 
-        summary = (
-            f"{item.available_entries}/{item.total_entries} titles owned ({percent}%)."
-            if item.total_entries
-            else "No titles available in Plex."
-        )
+    for item in datasets:
+        summary = item.get("summary") if isinstance(item, Mapping) else None
+        if not isinstance(summary, Mapping):
+            continue
+
+        slug = str(summary.get("slug", "")).strip()
+        entries = item.get("entries") if isinstance(item, Mapping) else None
+        if not isinstance(entries, Sequence):
+            continue
+
+        # Get all TMDB IDs for this showdown
+        all_tmdb_ids = [
+            str(entry.get("tmdb_id"))
+            for entry in entries
+            if isinstance(entry, Mapping) and entry.get("tmdb_id")
+        ]
+
+        # Filter to only available TMDB IDs (those in Plex library)
+        available_tmdb_ids = [
+            tmdb_id for tmdb_id in all_tmdb_ids if tmdb_id in index_set
+        ]
+        slug_to_tmdb_ids[slug] = available_tmdb_ids
+
+    # Create a mapping from slug to dataset for description lookup
+    slug_to_dataset = {
+        str(item.get("summary", {}).get("slug", "")): item
+        for item in datasets
+        if isinstance(item, Mapping) and isinstance(item.get("summary"), Mapping)
+    }
+
+    for index, item in enumerate(availability):
+        # Try to get the full description from the dataset
+        dataset = slug_to_dataset.get(item.slug)
+        description = None
+        if dataset and isinstance(dataset.get("summary"), Mapping):
+            description = dataset["summary"].get("description")
+
+        if description:
+            # Use the full description with the showdown URL
+            summary = f"{description.strip()}\n\n{item.showdown_url}"
+        else:
+            # Fallback to percentage summary
+            percent = 0
+            if item.total_entries > 0:
+                percent = int(
+                    round((item.available_entries / item.total_entries) * 100)
+                )
+            summary = (
+                f"{item.available_entries}/{item.total_entries} titles owned "
+                f"({percent}%)."
+                if item.total_entries
+                else "No titles available in Plex."
+            )
+
+        # Get the available TMDB IDs for this showdown
+        available_tmdb_ids = slug_to_tmdb_ids.get(item.slug, [])
+
+        # Build extra dict with label
+        extra_dict = {"label": label}
+        # Note: background images are handled via asset directories, not YAML fields
 
         collection = build_collection_entry(
             item.showdown_url or f"https://letterboxd.com/showdown/{item.slug}/",
             sort_title=(
-                f"Showdown {index:02d} {item.available_entries:02d}/{item.total_entries:02d}"
-                f" {item.title}"
+                f"+4 Showdown {index:02d} "
+                f"{item.available_entries:02d}/{item.total_entries:02d} {item.title}"
             ),
-            collection_order="custom",
+            collection_order=None,
             summary=summary,
             visible_library=True,
             visible_home=item.slug == spotlight_slug,
             visible_shared=item.slug == spotlight_slug,
-            extra={"label": label},
+            extra=extra_dict,
+            tmdb_ids=available_tmdb_ids,
         )
 
         collections[item.title] = collection
 
     return collections
+
+
+def _download_background_images(
+    collections: Dict[str, MutableMapping[str, Any]],
+    datasets: Iterable[Mapping[str, Any]],
+    asset_directory: Path,
+) -> None:
+    """Download background images for collections to asset directory."""
+
+    # Create asset directory if it doesn't exist
+    asset_directory.mkdir(parents=True, exist_ok=True)
+
+    # Create asset directory if needed for background images
+
+    for collection_name in collections.keys():
+        # Find the dataset for this collection by matching titles
+        dataset = None
+        for item in datasets:
+            if isinstance(item, Mapping) and isinstance(item.get("summary"), Mapping):
+                if item["summary"].get("title") == collection_name:
+                    dataset = item
+                    break
+
+        if not dataset:
+            continue
+
+        background_url = dataset.get("summary", {}).get("background_image")
+        if not background_url:
+            continue
+
+        try:
+            # Create collection asset directory
+            collection_dir = asset_directory / collection_name
+            collection_dir.mkdir(parents=True, exist_ok=True)
+
+            # Download the background image
+            print(f"Downloading background image for '{collection_name}'...")
+            response = requests.get(background_url, timeout=30)
+            response.raise_for_status()
+
+            # Determine file extension from URL
+            if background_url.endswith(".jpg"):
+                ext = ".jpg"
+            elif background_url.endswith(".png"):
+                ext = ".png"
+            elif background_url.endswith(".webp"):
+                ext = ".webp"
+            else:
+                ext = ".jpg"  # Default to jpg
+
+            # Save the image as background.ext in the collection directory
+            background_path = collection_dir / f"background{ext}"
+            background_path.write_bytes(response.content)
+
+            print(f"  → Saved to {background_path}")
+
+        except Exception as e:
+            print(f"  ! Failed to download background for '{collection_name}': {e}")
 
 
 def _write_manifest(
@@ -373,3 +452,6 @@ def _write_manifest(
             sort_keys=False,
             allow_unicode=False,
         )
+
+
+__all__ = ["generate_showdown_collections", "refresh_showdown_cache"]

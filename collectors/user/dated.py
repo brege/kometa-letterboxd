@@ -1,4 +1,22 @@
-"""Helpers for generating dated Letterboxd collections."""
+"""
+Helpers for generating dated Letterboxd collections.
+
+Dated lists are assumed to be in this format on a user's Letterboxd
+list page:
+
+  [prefix] - [month name], [year]
+
+Example:
+
+  Four Favorites - May, 2022
+  Four Favorites - June, 2022
+  ...
+
+and can also create a super collection:
+
+  Four Favorites Extended Edition
+
+"""
 
 from __future__ import annotations
 

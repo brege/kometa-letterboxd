@@ -81,7 +81,8 @@ def resolve_plex_config(
                 )
         else:
             raise ValueError(
-                f"Kometa config '{kometa_path}' lacks a 'libraries' definition to infer a library"
+                f"Kometa config '{kometa_path}' lacks a 'libraries' definition to "
+                f"infer a library"
             )
 
     return PlexConfig(

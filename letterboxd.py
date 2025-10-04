@@ -68,6 +68,22 @@ def load_config(config_path):
         return None
 
 
+def ensure_kometa_file(path: Path) -> Path:
+    expanded = Path(path).expanduser()
+    if expanded.exists():
+        return expanded
+
+    expanded.parent.mkdir(parents=True, exist_ok=True)
+    content = [
+        "collections:",
+        f"  {START_MARKER}",
+        f"  {END_MARKER}",
+        "",
+    ]
+    expanded.write_text("\n".join(content), encoding="utf-8")
+    return expanded
+
+
 def main():
     args = parse_args()
     config_path = determine_config_path(args.config)
@@ -208,19 +224,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-def ensure_kometa_file(path: Path) -> Path:
-    expanded = Path(path).expanduser()
-    if expanded.exists():
-        return expanded
-
-    expanded.parent.mkdir(parents=True, exist_ok=True)
-    content = [
-        "collections:",
-        f"  {START_MARKER}",
-        f"  {END_MARKER}",
-        "",
-    ]
-    expanded.write_text("\n".join(content), encoding="utf-8")
-    return expanded
