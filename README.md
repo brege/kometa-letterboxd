@@ -17,8 +17,6 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-
-
 ### Background
 
 Useful kometa references, assuming [`/opt/kometa`](https://github.com/Kometa-Team/Kometa)
@@ -72,13 +70,13 @@ $ find . -type f -name "*.py" -not -path "./kometa-venv/*" -not -path "./.git/*"
 ├── config.example.yml              # example config
 ├── config.yml                      # user config for kometa-letterboxd
 ├── data                            # all of this needs to be moved out of the repo root
-│   ├── film-club.yml               ## reference
-│   ├── letterboxd_lists.json       ## reference
-│   ├── showdown_cache.json         ## reference
-│   ├── showdown-spotlight.yml      ## reference
-│   ├── showdown_state.json         ## only for showdown rotation
-│   └── showdown.yml                ## reference
-├── letterboxd.py                   # orchestrator
+│   ├── featured
+│   │   └── showdown
+│   │       ├── cache.json          # generated from letterboxd.com/showdown/ (30 minute run)
+│   │       └── rotation.json       # showdown rotation state (sliding visibility window)
+│   └── user
+│       └── dated.json              # for "favorite movies - August, 2022" etc
+├── letterboxd.py                   # main orchestrator
 ├── README.md                       # this file
 └── requirements.txt                # plexapi, bs4, etc
 ```
@@ -94,11 +92,9 @@ command examples
      --showdown-json showdown.json \
      --threshold 6 \
      --sort matches_desc \
-     --manifest-output ./showdown-spotlight.yml \
      --window 5 \
      --label "Showdown Spotlight"
 ```
-
 
 ### How Showdowns Works
 

@@ -1,7 +1,6 @@
 # user data
 config.y*ml
 data/
-showdown.json
 
 # python matter
 __pycache__

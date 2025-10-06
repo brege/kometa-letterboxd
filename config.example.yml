@@ -2,7 +2,7 @@
 
 username: your-letterboxd-username
 request_timeout: 30
-lists_cache: data/letterboxd_lists.json
+lists_cache: data/user/dated.json
 refresh_lists: false
 
 dated:
@@ -22,7 +22,8 @@ tagged:
 
 showdown:
   showdown_json: path/to/showdown.json
-  manifest_output: path/to/showdown-spotlight.yml
+  cache_path: path/to/showdown-cache.json
+  state_file: path/to/showdown-rotation.json
   threshold: 6
   sort: matches_desc
   window: 5

@@ -34,7 +34,7 @@ DEFAULT_THRESHOLD = 4
 DEFAULT_SORT_MODE = "matches_desc"
 DEFAULT_WINDOW = 5
 DEFAULT_LABEL = "Showdown Spotlight"
-DEFAULT_STATE_FILE = Path("data/showdown_state.json")
+DEFAULT_STATE_FILE = Path("data/featured/showdown/rotation.json")
 
 
 @dataclass
@@ -72,28 +72,28 @@ def generate_showdown_collections(
     base_path: Path,
     kometa_config_path: Path | None,
     config_source: Path,
-) -> Tuple[Dict[str, MutableMapping[str, Any]], Optional[Path]]:
+) -> Tuple[Dict[str, MutableMapping[str, Any]], Optional[Path], List[str]]:
     if not showdown_config:
-        return {}, None
+        return {}, None, []
 
     showdown_path = resolve_path(showdown_config.get("showdown_json"), base_path)
     if not showdown_path:
         print("Showdown: no dataset path configured; skipping showdown collections.")
-        return {}, None
+        return {}, None, []
     if not showdown_path.exists():
         print(f"Showdown dataset not found at {showdown_path}; skipping generation.")
-        return {}, None
+        return {}, None, []
 
     datasets = load_showdown_datasets(showdown_path)
     if not datasets:
         print("Showdown dataset contained no entries; skipping generation.")
-        return {}, None
+        return {}, None, []
 
     if kometa_config_path is None:
         print(
             "Showdown: no Kometa config path provided; skipping showdown collections."
         )
-        return {}, None
+        return {}, None, []
 
     try:
         plex_config = resolve_plex_config(
@@ -105,13 +105,13 @@ def generate_showdown_collections(
         tmdb_index = build_tmdb_library_index(library)
     except Exception as exc:  # pragma: no cover - relies on Plex environment
         print(f"Showdown: unable to evaluate Plex library ({exc}); skipping.")
-        return {}, None
+        return {}, None, []
 
     threshold = int(showdown_config.get("threshold", DEFAULT_THRESHOLD))
     availability = _evaluate_datasets(datasets, tmdb_index, threshold)
     if not availability:
         print("Showdown: no datasets met the threshold; nothing to add.")
-        return {}, None
+        return {}, None, []
 
     sort_mode = str(showdown_config.get("sort", DEFAULT_SORT_MODE))
     ordered = _sort_availability(availability, sort_mode)
@@ -119,7 +119,7 @@ def generate_showdown_collections(
     window = int(showdown_config.get("window", DEFAULT_WINDOW))
     if window <= 0:
         print("Showdown: window size must be positive; skipping generation.")
-        return {}, None
+        return {}, None, []
 
     state_path = resolve_path(showdown_config.get("state_file"), base_path)
     if not state_path:
@@ -131,7 +131,48 @@ def generate_showdown_collections(
     )
     label = str(showdown_config.get("label", DEFAULT_LABEL))
 
-    collections = _build_collections(selected, datasets, tmdb_index, spotlight, label)
+    state = load_state(state_path)
+    lifecycle_state = state.get("collection_lifecycles")
+    if not isinstance(lifecycle_state, dict):
+        lifecycle_state = {}
+    else:
+        lifecycle_state = {
+            str(slug): str(status) for slug, status in lifecycle_state.items()
+        }
+
+    slug_title_map = _build_slug_title_map(datasets)
+
+    _update_collection_lifecycles(
+        lifecycle_state,
+        ordered,
+        selected,
+        spotlight,
+    )
+
+    stored_titles = state.get("collection_titles")
+    if not isinstance(stored_titles, dict):
+        stored_titles = {}
+    stored_titles.update(slug_title_map)
+
+    state["collection_lifecycles"] = lifecycle_state
+    state["collection_titles"] = dict(stored_titles)
+
+    retired_collection_names = _get_retired_collection_names(
+        lifecycle_state,
+        state.get("collection_titles"),
+    )
+
+    collections = _build_collections(
+        selected,
+        datasets,
+        tmdb_index,
+        spotlight,
+        label,
+        lifecycle_state,
+        retired_collection_names,
+    )
+
+    save_state(state_path, state)
 
     # Download background images to asset directory if configured
     asset_directory_config = showdown_config.get("asset_directory")
@@ -144,18 +185,7 @@ def generate_showdown_collections(
         showdown_config.get("kometa_destination"), base_path
     )
 
-    manifest_path = resolve_path(showdown_config.get("manifest_output"), base_path)
-    if manifest_path:
-        _write_manifest(
-            manifest_path,
-            collections,
-            label=label,
-            spotlight=spotlight,
-            config_source=config_source,
-            window_size=len(selected),
-        )
-
-    return collections, destination_path
+    return collections, destination_path, retired_collection_names
 
 
 def _evaluate_datasets(
@@ -266,12 +296,83 @@ def _select_sliding_window_and_spotlight(
     return selected, spotlight
 
 
+def _build_slug_title_map(datasets: Iterable[Mapping[str, Any]]) -> Dict[str, str]:
+    mapping: Dict[str, str] = {}
+    for item in datasets:
+        summary = item.get("summary") if isinstance(item, Mapping) else None
+        if not isinstance(summary, Mapping):
+            continue
+        slug = str(summary.get("slug", "")).strip()
+        if not slug:
+            continue
+        title = str(summary.get("title", slug)).strip() or slug
+        mapping[slug] = title
+    return mapping
+
+
+def _update_collection_lifecycles(
+    collection_lifecycles: MutableMapping[str, str],
+    ordered: Sequence[ShowdownAvailability],
+    selected: Sequence[ShowdownAvailability],
+    spotlight: Optional[ShowdownAvailability],
+) -> None:
+    selected_slugs = {item.slug for item in selected}
+    spotlight_slug = spotlight.slug if spotlight else None
+    ordered_slugs = [item.slug for item in ordered]
+
+    for slug in ordered_slugs:
+        if slug == spotlight_slug:
+            collection_lifecycles[slug] = "spotlight"
+            continue
+
+        current_state = collection_lifecycles.get(slug)
+        if slug in selected_slugs:
+            if current_state == "spotlight":
+                collection_lifecycles[slug] = "library"
+            elif current_state is None or current_state == "retire":
+                collection_lifecycles[slug] = "library"
+            # existing "library" state remains unchanged
+        else:
+            if current_state in {"spotlight", "library"}:
+                collection_lifecycles[slug] = "retire"
+
+    # Any slug that disappeared from the ordered list should also retire
+    known_slugs = set(collection_lifecycles.keys())
+    missing_slugs = known_slugs - set(ordered_slugs)
+    for slug in missing_slugs:
+        collection_lifecycles[slug] = "retire"
+
+
+def _get_retired_collection_names(
+    collection_lifecycles: Mapping[str, str],
+    slug_to_title: Mapping[str, str] | None,
+) -> List[str]:
+    if not collection_lifecycles:
+        return []
+
+    titles = slug_to_title or {}
+    retired: List[str] = []
+
+    for slug, title in titles.items():
+        if collection_lifecycles.get(slug) == "retire" and title:
+            retired.append(title)
+
+    # Include any retired slugs missing from the title map using slug as fallback
+    for slug, state in collection_lifecycles.items():
+        if state == "retire" and slug not in titles and slug:
+            retired.append(slug)
+
+    return retired
+
+
 def _build_collections(
     availability: Sequence[ShowdownAvailability],
     datasets: Iterable[Mapping[str, Any]],
     tmdb_index: Iterable[str],
     spotlight: Optional[ShowdownAvailability],
     label: str,
+    collection_lifecycles: Mapping[str, str],
+    retired_names: Sequence[str],
 ) -> Dict[str, MutableMapping[str, Any]]:
     collections: Dict[str, MutableMapping[str, Any]] = {}
     spotlight_slug = spotlight.slug if spotlight else None
@@ -339,7 +440,24 @@ def _build_collections(
 
         # Build extra dict with label
         extra_dict = {"label": label}
+        if index == 0 and retired_names:
+            extra_dict["delete_collections_named"] = list(dict.fromkeys(retired_names))
         # Note: background images are handled via asset directories, not YAML fields
+
+        lifecycle_state = collection_lifecycles.get(item.slug, "library")
+        if lifecycle_state == "spotlight":
+            visible_library = True
+            visible_home = True
+            visible_shared = True
+        elif lifecycle_state == "library":
+            visible_library = True
+            visible_home = False
+            visible_shared = False
+        else:
+            # Fallback for unexpected states
+            visible_library = True
+            visible_home = item.slug == spotlight_slug
+            visible_shared = item.slug == spotlight_slug
 
         collection = build_collection_entry(
             item.showdown_url or f"https://letterboxd.com/showdown/{item.slug}/",
@@ -349,9 +467,9 @@ def _build_collections(
             ),
             collection_order=None,
             summary=summary,
-            visible_library=True,
-            visible_home=item.slug == spotlight_slug,
-            visible_shared=item.slug == spotlight_slug,
+            visible_library=visible_library,
+            visible_home=visible_home,
+            visible_shared=visible_shared,
             extra=extra_dict,
             tmdb_ids=available_tmdb_ids,
         )
@@ -427,10 +545,14 @@ def _write_manifest(
     spotlight: Optional[ShowdownAvailability],
     config_source: Path,
     window_size: int,
+    retired_collections: Sequence[str] | None = None,
 ) -> None:
     manifest_data = {
         "collections": {name: dict(value) for name, value in collections.items()},
     }
+
+    if retired_collections:
+        manifest_data["delete_collections_named"] = list(retired_collections)
 
     path.parent.mkdir(parents=True, exist_ok=True)
 

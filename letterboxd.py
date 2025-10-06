@@ -9,7 +9,7 @@ from collectors.featured.showdown import generate_showdown_collections
 from collectors.user.dated import generate_dated_collections, get_dated_lists
 from collectors.user.lists import ensure_user_lists
 from collectors.user.tagged import generate_tagged_collections, get_lists_with_tag
-from common.kometa import END_MARKER, START_MARKER, write_collections_section
+from common.kometa import write_collections_section
 
 
 def parse_args():
@@ -74,13 +74,17 @@ def ensure_kometa_file(path: Path) -> Path:
         return expanded
 
     expanded.parent.mkdir(parents=True, exist_ok=True)
-    content = [
-        "collections:",
-        f"  {START_MARKER}",
-        f"  {END_MARKER}",
-        "",
-    ]
-    expanded.write_text("\n".join(content), encoding="utf-8")
+    with expanded.open("w", encoding="utf-8") as handle:
+        handle.write("# Initialized by kometa-letterboxd\n\n")
+        yaml.safe_dump(
+            {"collections": {}},
+            handle,
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+            width=120,
+            indent=2,
+        )
     return expanded
 
 
@@ -94,7 +98,7 @@ def main():
 
     username = config.get("username")
     request_timeout = config.get("request_timeout", 30)
-    lists_cache_path = config.get("lists_cache", "data/letterboxd_lists.json")
+    lists_cache_path = config.get("lists_cache", "data/user/dated.json")
     refresh_lists = bool(config.get("refresh_lists", False))
 
     kometa_cfg = config.get("kometa", {})
@@ -178,17 +182,23 @@ def main():
         )
         all_collections.update(tagged_collections)
 
-    showdown_collections, showdown_destination = generate_showdown_collections(
-        all_user_lists,
-        showdown_cfg,
-        base_path=config_path.parent,
-        kometa_config_path=kometa_config_path,
-        config_source=config_path,
+    showdown_delete: list[str] = []
+
+    showdown_collections, showdown_destination, showdown_retired = (
+        generate_showdown_collections(
+            all_user_lists,
+            showdown_cfg,
+            base_path=config_path.parent,
+            kometa_config_path=kometa_config_path,
+            config_source=config_path,
+        )
     )
+    showdown_retired = list(dict.fromkeys(showdown_retired))
     if showdown_collections:
         target_path = showdown_destination or default_destination
         if target_path == default_destination:
             all_collections.update(showdown_collections)
+            showdown_delete = showdown_retired
         else:
             try:
                 ensured_target = ensure_kometa_file(target_path)
@@ -197,6 +207,7 @@ def main():
                     showdown_collections,
                     generator=f"{Path(__file__).name} showdown",
                     config_source=config_path,
+                    delete_collections_named=showdown_retired,
                 )
                 print(f"Showdown collections written to {ensured_target}")
             except Exception as exc:
@@ -204,6 +215,11 @@ def main():
                     f"Error updating showdown Kometa file {target_path}: {exc}",
                     file=sys.stderr,
                 )
+            showdown_delete = []
+
+    delete_collections_named: list[str] = []
+    if showdown_delete:
+        delete_collections_named.extend(showdown_delete)
 
     try:
         write_collections_section(
@@ -211,6 +227,7 @@ def main():
             all_collections,
             generator=Path(__file__).name,
             config_source=config_path,
+            delete_collections_named=delete_collections_named or None,
         )
         print(
             f"\nKometa config file {kometa_destination} has been updated successfully."
