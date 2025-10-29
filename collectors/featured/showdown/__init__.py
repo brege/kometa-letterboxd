@@ -264,33 +264,43 @@ def _select_sliding_window_and_spotlight(
     if window <= 0:
         return [], None
 
-    # Load state to get current window position
+    # Load state to get current spotlight position (instead of window position)
     state = load_state(state_path)
-    current_position = state.get("window_position", 0)
+    current_spotlight_position = state.get("window_position", 0)
 
-    # Ensure position is valid
-    if current_position < 0 or current_position >= len(ordered):
-        current_position = 0
+    # Ensure spotlight position is valid
+    if current_spotlight_position < 0 or current_spotlight_position >= len(ordered):
+        current_spotlight_position = 0
 
-    # Calculate window bounds
-    window_start = current_position
-    window_end = min(current_position + window, len(ordered))
+    # Calculate window bounds centered around spotlight position
+    # Spotlight should be at index 2 (position 3) within the window
+    spotlight_offset = min(2, window // 2)
+    window_start = max(0, current_spotlight_position - spotlight_offset)
+    window_end = min(window_start + window, len(ordered))
+
+    # Adjust window_start if we hit the end boundary
+    if window_end - window_start < window and window_start > 0:
+        window_start = max(0, window_end - window)
 
     # Extract window of collections
     selected = list(ordered[window_start:window_end])
 
-    # Spotlight is always position 3 (center) of window, or middle if window < 5
-    spotlight_index = min(2, len(selected) // 2) if selected else 0
-    spotlight = selected[spotlight_index] if spotlight_index < len(selected) else None
+    # Find spotlight within the selected window
+    spotlight_index_in_window = current_spotlight_position - window_start
+    spotlight = (
+        selected[spotlight_index_in_window]
+        if spotlight_index_in_window < len(selected)
+        else None
+    )
 
-    # Advance window position for next run
-    next_position = current_position + 1
-    if next_position >= len(ordered):
+    # Advance spotlight position for next run (daily rotation)
+    next_spotlight_position = current_spotlight_position + 1
+    if next_spotlight_position >= len(ordered):
         # Reset to beginning when we've gone through all collections
-        next_position = 0
+        next_spotlight_position = 0
 
-    # Save new position
-    state["window_position"] = next_position
+    # Save new spotlight position
+    state["window_position"] = next_spotlight_position
     save_state(state_path, state)
 
     return selected, spotlight
