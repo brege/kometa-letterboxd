@@ -125,13 +125,14 @@ def generate_showdown_collections(
     if not state_path:
         state_path = (base_path / DEFAULT_STATE_FILE).resolve()
 
+    state = load_state(state_path)
+
     # Calculate sliding window based on spotlight progression
-    selected, spotlight = _select_sliding_window_and_spotlight(
-        ordered, window, state_path
+    selected, spotlight, next_spotlight_position = _select_sliding_window_and_spotlight(
+        ordered, window, state
     )
     label = str(showdown_config.get("label", DEFAULT_LABEL))
 
-    state = load_state(state_path)
     lifecycle_state = state.get("collection_lifecycles")
     if not isinstance(lifecycle_state, dict):
         lifecycle_state = {}
@@ -156,6 +157,7 @@ def generate_showdown_collections(
 
     state["collection_lifecycles"] = lifecycle_state
     state["collection_titles"] = dict(stored_titles)
+    state["window_position"] = next_spotlight_position
 
     retired_collection_names = _get_retired_collection_names(
         lifecycle_state,
@@ -256,17 +258,22 @@ def _availability_sort_key(item: ShowdownAvailability) -> Any:
 def _select_sliding_window_and_spotlight(
     ordered: Sequence[ShowdownAvailability],
     window: int,
-    state_path: Path,
-) -> Tuple[List[ShowdownAvailability], Optional[ShowdownAvailability]]:
+    state: Mapping[str, Any],
+) -> Tuple[
+    List[ShowdownAvailability],
+    Optional[ShowdownAvailability],
+    int,
+]:
+    try:
+        current_spotlight_position = int(state.get("window_position", 0))
+    except (TypeError, ValueError):
+        current_spotlight_position = 0
+
     if not ordered:
-        return [], None
+        return [], None, current_spotlight_position
 
     if window <= 0:
-        return [], None
-
-    # Load state to get current spotlight position (instead of window position)
-    state = load_state(state_path)
-    current_spotlight_position = state.get("window_position", 0)
+        return [], None, current_spotlight_position
 
     # Ensure spotlight position is valid
     if current_spotlight_position < 0 or current_spotlight_position >= len(ordered):
@@ -299,11 +306,8 @@ def _select_sliding_window_and_spotlight(
         # Reset to beginning when we've gone through all collections
         next_spotlight_position = 0
 
-    # Save new spotlight position
-    state["window_position"] = next_spotlight_position
-    save_state(state_path, state)
-
-    return selected, spotlight
+    # Defer persisting the new spotlight position to the caller
+    return selected, spotlight, next_spotlight_position
 
 
 def _build_slug_title_map(datasets: Iterable[Mapping[str, Any]]) -> Dict[str, str]:
