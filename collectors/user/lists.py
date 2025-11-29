@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import re
 from pathlib import Path
 from typing import Iterable, List, Tuple
@@ -84,20 +85,32 @@ def ensure_user_lists(
     cache_path: str | Path | None = None,
     timeout: int = 30,
     refresh: bool = False,
+    days_before: int = 0,
 ) -> List[Tuple[str, str, List[str]]]:
     path = Path(cache_path).expanduser() if cache_path else None
 
     if path and not refresh:
         cached = load_lists(path)
         if cached:
-            return [
-                (
-                    str(item.get("title")),
-                    str(item.get("url_suffix")),
-                    list(item.get("tags", [])),
-                )
-                for item in cached
-            ]
+            # Check if cache has a dated list from the effective current month (with offset)
+            today = datetime.date.today()
+            offset_date = today + datetime.timedelta(days=days_before)
+            current_month_str = offset_date.strftime("%B, %Y")
+            has_current_month = any(
+                current_month_str in str(item.get("title", "")) for item in cached
+            )
+
+            if has_current_month:
+                # Cache is fresh, use it
+                return [
+                    (
+                        str(item.get("title")),
+                        str(item.get("url_suffix")),
+                        list(item.get("tags", [])),
+                    )
+                    for item in cached
+                ]
+            # else: cache is stale, fall through to fetch
 
     lists = fetch_user_lists(username, timeout=timeout)
 

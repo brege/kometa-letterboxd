@@ -59,7 +59,7 @@ def get_dated_lists(all_lists, prefix, days_before=0):
     for title, url_suffix, _ in all_lists:
         parsed_date = parse_dated_list_title(title, prefix)
         if parsed_date is not None:
-            if parsed_date <= current_date.replace(day=1):
+            if parsed_date <= effective_current_month_start:
                 print(f"- Found dated list (past/current): {title}")
             else:
                 print(f"- Found dated list (future): {title}")

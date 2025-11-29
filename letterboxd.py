@@ -151,6 +151,7 @@ def main():
             cache_path=lists_cache_path,
             timeout=request_timeout,
             refresh=refresh_lists,
+            days_before=days_before,
         )
     except Exception as exc:
         print(
