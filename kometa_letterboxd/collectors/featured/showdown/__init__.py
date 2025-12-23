@@ -3,30 +3,22 @@
 from __future__ import annotations
 
 import datetime
-import requests
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
-)
+from typing import Any
 
+import requests
 import yaml
 
-from common.kometa import build_collection_entry
-from common.plex import (
+from kometa_letterboxd.common.kometa import build_collection_entry
+from kometa_letterboxd.common.plex import (
     build_tmdb_library_index,
     connect_to_plex,
     count_available_tmdb_ids,
     resolve_plex_config,
 )
+
 from .probe import refresh_showdown_cache
 from .storage import load_showdown_datasets, load_state, resolve_path, save_state
 
@@ -44,7 +36,7 @@ class ShowdownAvailability:
     showdown_url: str
     total_entries: int
     available_entries: int
-    published_at: Optional[str]
+    published_at: str | None
 
     @property
     def match_ratio(self) -> float:
@@ -53,7 +45,7 @@ class ShowdownAvailability:
         return self.available_entries / self.total_entries
 
     @property
-    def published_datetime(self) -> Optional[datetime.datetime]:
+    def published_datetime(self) -> datetime.datetime | None:
         if not self.published_at:
             return None
         value = self.published_at
@@ -72,7 +64,7 @@ def generate_showdown_collections(
     base_path: Path,
     kometa_config_path: Path | None,
     config_source: Path,
-) -> Tuple[Dict[str, MutableMapping[str, Any]], Optional[Path], List[str]]:
+) -> tuple[dict[str, MutableMapping[str, Any]], Path | None, list[str]]:
     if not showdown_config:
         return {}, None, []
 
@@ -194,9 +186,9 @@ def _evaluate_datasets(
     datasets: Iterable[Mapping[str, Any]],
     tmdb_index: Iterable[str],
     threshold: int,
-) -> List[ShowdownAvailability]:
+) -> list[ShowdownAvailability]:
     index_set = {str(tmdb_id) for tmdb_id in tmdb_index}
-    availability: List[ShowdownAvailability] = []
+    availability: list[ShowdownAvailability] = []
 
     for item in datasets:
         summary = item.get("summary") if isinstance(item, Mapping) else None
@@ -240,7 +232,7 @@ def _evaluate_datasets(
 def _sort_availability(
     items: Sequence[ShowdownAvailability],
     sort_mode: str,
-) -> List[ShowdownAvailability]:
+) -> list[ShowdownAvailability]:
     if sort_mode == "matches_asc":
         return sorted(items, key=_availability_sort_key)
     if sort_mode == "none":
@@ -259,9 +251,9 @@ def _select_sliding_window_and_spotlight(
     ordered: Sequence[ShowdownAvailability],
     window: int,
     state: Mapping[str, Any],
-) -> Tuple[
-    List[ShowdownAvailability],
-    Optional[ShowdownAvailability],
+) -> tuple[
+    list[ShowdownAvailability],
+    ShowdownAvailability | None,
     int,
 ]:
     try:
@@ -310,8 +302,8 @@ def _select_sliding_window_and_spotlight(
     return selected, spotlight, next_spotlight_position
 
 
-def _build_slug_title_map(datasets: Iterable[Mapping[str, Any]]) -> Dict[str, str]:
-    mapping: Dict[str, str] = {}
+def _build_slug_title_map(datasets: Iterable[Mapping[str, Any]]) -> dict[str, str]:
+    mapping: dict[str, str] = {}
     for item in datasets:
         summary = item.get("summary") if isinstance(item, Mapping) else None
         if not isinstance(summary, Mapping):
@@ -328,7 +320,7 @@ def _update_collection_lifecycles(
     collection_lifecycles: MutableMapping[str, str],
     ordered: Sequence[ShowdownAvailability],
     selected: Sequence[ShowdownAvailability],
-    spotlight: Optional[ShowdownAvailability],
+    spotlight: ShowdownAvailability | None,
 ) -> None:
     selected_slugs = {item.slug for item in selected}
     spotlight_slug = spotlight.slug if spotlight else None
@@ -360,12 +352,12 @@ def _update_collection_lifecycles(
 def _get_retired_collection_names(
     collection_lifecycles: Mapping[str, str],
     slug_to_title: Mapping[str, str] | None,
-) -> List[str]:
+) -> list[str]:
     if not collection_lifecycles:
         return []
 
     titles = slug_to_title or {}
-    retired: List[str] = []
+    retired: list[str] = []
 
     for slug, title in titles.items():
         if collection_lifecycles.get(slug) == "retire" and title:
@@ -383,12 +375,12 @@ def _build_collections(
     availability: Sequence[ShowdownAvailability],
     datasets: Iterable[Mapping[str, Any]],
     tmdb_index: Iterable[str],
-    spotlight: Optional[ShowdownAvailability],
+    spotlight: ShowdownAvailability | None,
     label: str,
     collection_lifecycles: Mapping[str, str],
     retired_names: Sequence[str],
-) -> Dict[str, MutableMapping[str, Any]]:
-    collections: Dict[str, MutableMapping[str, Any]] = {}
+) -> dict[str, MutableMapping[str, Any]]:
+    collections: dict[str, MutableMapping[str, Any]] = {}
     spotlight_slug = spotlight.slug if spotlight else None
 
     # Create a mapping from slug to available TMDB IDs
@@ -494,7 +486,7 @@ def _build_collections(
 
 
 def _download_background_images(
-    collections: Dict[str, MutableMapping[str, Any]],
+    collections: dict[str, MutableMapping[str, Any]],
     datasets: Iterable[Mapping[str, Any]],
     asset_directory: Path,
 ) -> None:
@@ -556,7 +548,7 @@ def _write_manifest(
     collections: Mapping[str, Mapping[str, Any]],
     *,
     label: str,
-    spotlight: Optional[ShowdownAvailability],
+    spotlight: ShowdownAvailability | None,
     config_source: Path,
     window_size: int,
     retired_collections: Sequence[str] | None = None,

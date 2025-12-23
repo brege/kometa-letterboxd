@@ -24,13 +24,13 @@ This project interfaces Plex with Letterboxd through scripting *around* Kometa. 
 
 #### List Builders
 
-- [Dated](/lists/dated.py)  
+- [Dated](/lists/dated.py)
   monthly Letterboxd lists of the form "favorite movies - August, 2022". Replaces the "favorite movies" with "new title", and can be made into a wrapper to dynamically build a monthly collection.
 
-- [Tagged](/lists/tagged.py)  
+- [Tagged](/lists/tagged.py)
   if you tag collections with "plex" on Letterboxd, this builder will create Kometa collections from these collections. These are handpicked films that are easier to pick and tease out of Letterboxd than anywhere else, especially compared to Plex.
 
-- [Showdown](/lists/showdown.py)  
+- [Showdown](/lists/showdown.py)
   this is a sophisticated method.  [Letterboxd Showdowns](https://letterboxd.com/showdown/) is a page of over 250 lists, each of which are constructed by a
 [motif](https://en.wikipedia.org/wiki/Motif_(narrative)) such as "Brief Encounter" or "Sense and Sensibility" that don't narrowly fit into a genre (War) or theme (political and human rights).
 

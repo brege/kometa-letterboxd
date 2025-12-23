@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any
 
 
-def resolve_path(raw: Any, base_path: Path) -> Optional[Path]:
+def resolve_path(raw: Any, base_path: Path) -> Path | None:
     """Resolve a showdown-relative path against the collector base path."""
 
     if not raw:
@@ -18,7 +19,7 @@ def resolve_path(raw: Any, base_path: Path) -> Optional[Path]:
     return candidate
 
 
-def load_showdown_datasets(path: Path) -> List[Mapping[str, Any]]:
+def load_showdown_datasets(path: Path) -> list[Mapping[str, Any]]:
     """Load showdown datasets from the cached JSON payload."""
 
     try:
@@ -35,14 +36,14 @@ def load_showdown_datasets(path: Path) -> List[Mapping[str, Any]]:
         print("Showdown: unexpected dataset structure; expected a list of items.")
         return []
 
-    datasets: List[Mapping[str, Any]] = []
+    datasets: list[Mapping[str, Any]] = []
     for item in payload:
         if isinstance(item, Mapping):
             datasets.append(item)
     return datasets
 
 
-def load_showdown_cache(path: Path) -> Dict[str, Dict[str, Any]]:
+def load_showdown_cache(path: Path) -> dict[str, dict[str, Any]]:
     """Load showdown datasets keyed by slug for cache reuse."""
 
     if not path.exists():
@@ -62,7 +63,7 @@ def load_showdown_cache(path: Path) -> Dict[str, Dict[str, Any]]:
     else:
         return {}
 
-    cache: Dict[str, Dict[str, Any]] = {}
+    cache: dict[str, dict[str, Any]] = {}
     for entry in entries:
         if not isinstance(entry, Mapping):
             continue
@@ -85,7 +86,7 @@ def save_showdown_cache(path: Path, cache: Mapping[str, Mapping[str, Any]]) -> N
         json.dump(payload, handle, indent=2, sort_keys=False)
 
 
-def load_state(path: Path) -> Dict[str, Any]:
+def load_state(path: Path) -> dict[str, Any]:
     """Load showdown rotation state from disk."""
 
     if not path.exists():

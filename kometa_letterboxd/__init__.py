@@ -1,0 +1,1 @@
+"""Kometa Letterboxd collections generator."""

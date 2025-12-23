@@ -5,11 +5,17 @@ from pathlib import Path
 
 import yaml
 
-from collectors.featured.showdown import generate_showdown_collections
-from collectors.user.dated import generate_dated_collections, get_dated_lists
-from collectors.user.lists import ensure_user_lists
-from collectors.user.tagged import generate_tagged_collections, get_lists_with_tag
-from common.kometa import write_collections_section
+from kometa_letterboxd.collectors.featured.showdown import generate_showdown_collections
+from kometa_letterboxd.collectors.user.dated import (
+    generate_dated_collections,
+    get_dated_lists,
+)
+from kometa_letterboxd.collectors.user.lists import ensure_user_lists
+from kometa_letterboxd.collectors.user.tagged import (
+    generate_tagged_collections,
+    get_lists_with_tag,
+)
+from kometa_letterboxd.common.kometa import write_collections_section
 
 
 def parse_args():

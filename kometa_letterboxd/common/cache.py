@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Iterable, List, Mapping
 
 
-def load_lists(cache_path: str | Path) -> List[Mapping[str, object]]:
+def load_lists(cache_path: str | Path) -> list[Mapping[str, object]]:
     """Return cached Letterboxd lists if the cache exists."""
 
     path = Path(cache_path).expanduser()
@@ -25,7 +25,7 @@ def load_lists(cache_path: str | Path) -> List[Mapping[str, object]]:
     if not isinstance(raw, list):
         return []
 
-    result: List[Mapping[str, object]] = []
+    result: list[Mapping[str, object]] = []
     for entry in raw:
         if (
             isinstance(entry, Mapping)

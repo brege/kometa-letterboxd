@@ -5,8 +5,8 @@ from __future__ import annotations
 import datetime
 import os
 import subprocess
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from pathlib import Path
-from typing import Dict, Iterable, Mapping, MutableMapping, Sequence
 
 import yaml
 
@@ -70,7 +70,7 @@ def build_collection_entry(
 
 def write_collections_section(
     destination: str | Path,
-    collections: Dict[str, Dict[str, object]],
+    collections: dict[str, dict[str, object]],
     *,
     generator: str,
     config_source: str | Path,

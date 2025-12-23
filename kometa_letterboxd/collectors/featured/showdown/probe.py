@@ -5,9 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Mapping, Optional, Sequence
+from typing import Callable
 from urllib.parse import urljoin
 
 import requests
@@ -30,15 +31,15 @@ _YEAR_PATTERN = re.compile(r"\((\d{4})\)$")
 class ShowdownSummary:
     slug: str
     title: str
-    logline: Optional[str]
-    status: Optional[str]
+    logline: str | None
+    status: str | None
     showdown_url: str
     crew_list_url: str
-    description: Optional[str] = None
-    background_image: Optional[str] = None
+    description: str | None = None
+    background_image: str | None = None
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, object]) -> "ShowdownSummary":
+    def from_dict(cls, data: Mapping[str, object]) -> ShowdownSummary:
         return cls(
             slug=str(data.get("slug", "")),
             title=str(data.get("title", "")),
@@ -56,13 +57,13 @@ class ShowdownEntry:
     rank: int
     film_name: str
     film_slug: str
-    film_year: Optional[int]
+    film_year: int | None
     film_url: str
-    details_endpoint: Optional[str] = None
-    tmdb_id: Optional[str] = None
+    details_endpoint: str | None = None
+    tmdb_id: str | None = None
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, object]) -> "ShowdownEntry":
+    def from_dict(cls, data: Mapping[str, object]) -> ShowdownEntry:
         rank_value = data.get("rank", 0)
         try:
             rank_int = int(rank_value)
@@ -90,8 +91,8 @@ class ShowdownEntry:
 @dataclass
 class ShowdownDataset:
     summary: ShowdownSummary
-    published_at: Optional[str]
-    entries: List[ShowdownEntry] = field(default_factory=list)
+    published_at: str | None
+    entries: list[ShowdownEntry] = field(default_factory=list)
 
     @property
     def entry_count(self) -> int:
@@ -102,7 +103,7 @@ class ShowdownDataset:
         return any(not entry.tmdb_id for entry in self.entries)
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, object]) -> "ShowdownDataset":
+    def from_dict(cls, data: Mapping[str, object]) -> ShowdownDataset:
         summary_data = (
             data.get("summary") if isinstance(data.get("summary"), Mapping) else {}
         )
@@ -110,7 +111,7 @@ class ShowdownDataset:
         raw_entries = (
             data.get("entries") if isinstance(data.get("entries"), Sequence) else []
         )
-        entries: List[ShowdownEntry] = []
+        entries: list[ShowdownEntry] = []
         for item in raw_entries:
             if isinstance(item, Mapping):
                 try:
@@ -124,11 +125,11 @@ class ShowdownDataset:
         )
         return cls(summary=summary, published_at=published_at, entries=entries)
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         return asdict(self)
 
 
-def _ensure_session(session: Optional[Session]) -> Session:
+def _ensure_session(session: Session | None) -> Session:
     if session is not None:
         return session
     ses = requests.Session()
@@ -142,7 +143,7 @@ def fetch_html(url: str, *, session: Session, timeout: int) -> str:
     return response.text
 
 
-def parse_showdown_description(html: str) -> Optional[str]:
+def parse_showdown_description(html: str) -> str | None:
     """Extract the description from a showdown page."""
     soup = BeautifulSoup(html, "html.parser")
 
@@ -156,7 +157,7 @@ def parse_showdown_description(html: str) -> Optional[str]:
     return None
 
 
-def parse_showdown_background_image(html: str) -> Optional[str]:
+def parse_showdown_background_image(html: str) -> str | None:
     """Extract the background image URL from a showdown page."""
     # Look for images with the characteristic background dimensions
     pattern = r'https://[^"\']+?-1200-1200-675-675-crop-fill\.jpg'
@@ -169,9 +170,9 @@ def parse_showdown_background_image(html: str) -> Optional[str]:
     return None
 
 
-def parse_showdown_index(html: str) -> List[ShowdownSummary]:
+def parse_showdown_index(html: str) -> list[ShowdownSummary]:
     soup = BeautifulSoup(html, "html.parser")
-    summaries: List[ShowdownSummary] = []
+    summaries: list[ShowdownSummary] = []
     seen_slugs = set()
 
     for anchor in soup.select("section.content-teaser a.image"):
@@ -213,7 +214,7 @@ def parse_showdown_index(html: str) -> List[ShowdownSummary]:
     return summaries
 
 
-def _extract_year_from_name(name: str) -> Optional[int]:
+def _extract_year_from_name(name: str) -> int | None:
     match = _YEAR_PATTERN.search(name or "")
     if not match:
         return None
@@ -223,7 +224,7 @@ def _extract_year_from_name(name: str) -> Optional[int]:
         return None
 
 
-def parse_showdown_crew_list(html: str) -> tuple[Optional[str], List[ShowdownEntry]]:
+def parse_showdown_crew_list(html: str) -> tuple[str | None, list[ShowdownEntry]]:
     soup = BeautifulSoup(html, "html.parser")
 
     published_at = None
@@ -231,7 +232,7 @@ def parse_showdown_crew_list(html: str) -> tuple[Optional[str], List[ShowdownEnt
     if published_time and published_time.has_attr("datetime"):
         published_at = published_time["datetime"].strip() or None
 
-    entries: List[ShowdownEntry] = []
+    entries: list[ShowdownEntry] = []
     for li in soup.select("li.posteritem"):
         component = li.select_one("div.react-component")
         if not component:
@@ -268,7 +269,7 @@ def parse_showdown_crew_list(html: str) -> tuple[Optional[str], List[ShowdownEnt
     return published_at, entries
 
 
-def _extract_tmdb_id_from_film_page(html: str) -> Optional[str]:
+def _extract_tmdb_id_from_film_page(html: str) -> str | None:
     soup = BeautifulSoup(html, "html.parser")
     body = soup.find("body")
     if body and body.has_attr("data-tmdb-id"):
@@ -282,7 +283,7 @@ def _populate_descriptions(
     *,
     session: Session,
     timeout: int,
-    progress: Optional[Callable[[str], None]] = None,
+    progress: Callable[[str], None] | None = None,
 ) -> None:
     """Fetch and populate descriptions and background images for showdowns that
     don't have them."""
@@ -323,9 +324,9 @@ def _populate_tmdb_ids(
     *,
     session: Session,
     timeout: int,
-    progress: Optional[Callable[[str], None]] = None,
+    progress: Callable[[str], None] | None = None,
 ) -> None:
-    film_map: Dict[str, List[ShowdownEntry]] = {}
+    film_map: dict[str, list[ShowdownEntry]] = {}
     for dataset in datasets:
         for entry in dataset.entries:
             if entry.tmdb_id:
@@ -351,13 +352,13 @@ def _populate_tmdb_ids(
 def collect_showdown_dataset(
     *,
     timeout: int = DEFAULT_TIMEOUT,
-    limit: Optional[int] = None,
-    session: Optional[Session] = None,
+    limit: int | None = None,
+    session: Session | None = None,
     use_cache: bool = True,
-    existing_cache: Optional[Mapping[str, Mapping[str, object]]] = None,
+    existing_cache: Mapping[str, Mapping[str, object]] | None = None,
     force_refresh: bool = False,
-    progress: Optional[Callable[[str], None]] = print,
-) -> List[ShowdownDataset]:
+    progress: Callable[[str], None] = print,
+) -> list[ShowdownDataset]:
     ses = _ensure_session(session)
 
     def emit(message: str) -> None:
@@ -373,7 +374,7 @@ def collect_showdown_dataset(
     if limit is not None:
         summaries = summaries[:limit]
 
-    datasets: List[ShowdownDataset] = []
+    datasets: list[ShowdownDataset] = []
     total = len(summaries)
 
     for idx, summary in enumerate(summaries, start=1):
@@ -386,7 +387,7 @@ def collect_showdown_dataset(
             datasets.append(dataset)
             continue
 
-        dataset: Optional[ShowdownDataset] = None
+        dataset: ShowdownDataset | None = None
         cached_entry = None
         if use_cache and not force_refresh and summary.slug in cache:
             cached_entry = cache.get(summary.slug)
@@ -448,10 +449,10 @@ def refresh_showdown_cache(
     cache_path: Path,
     *,
     timeout: int = DEFAULT_TIMEOUT,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     force_refresh: bool = False,
-    progress: Optional[Callable[[str], None]] = print,
-) -> List[ShowdownDataset]:
+    progress: Callable[[str], None] = print,
+) -> list[ShowdownDataset]:
     existing_cache = {} if force_refresh else load_showdown_cache(cache_path)
     datasets = collect_showdown_dataset(
         timeout=timeout,
@@ -462,7 +463,7 @@ def refresh_showdown_cache(
         progress=progress,
     )
 
-    updated_cache: Dict[str, Dict[str, object]] = {
+    updated_cache: dict[str, dict[str, object]] = {
         dataset.summary.slug: dataset.to_dict()
         for dataset in datasets
         if dataset.entry_count
@@ -513,7 +514,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> None:  # pragma: no cover - CLI glue
+def main(argv: Sequence[str] | None = None) -> None:  # pragma: no cover - CLI glue
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
 

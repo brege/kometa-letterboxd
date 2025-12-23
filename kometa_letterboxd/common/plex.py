@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Set, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import yaml
 
@@ -23,7 +24,7 @@ class PlexConfig:
     library: str = "Movies"
 
 
-def _load_yaml(path: Path) -> Dict[str, object]:
+def _load_yaml(path: Path) -> dict[str, object]:
     with path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle) or {}
     if not isinstance(data, dict):
@@ -31,14 +32,14 @@ def _load_yaml(path: Path) -> Dict[str, object]:
     return data
 
 
-def load_letterboxd_config(config_path: str | Path) -> Dict[str, object]:
+def load_letterboxd_config(config_path: str | Path) -> dict[str, object]:
     expanded = Path(config_path).expanduser()
     return _load_yaml(expanded)
 
 
 def resolve_plex_config(
     kometa_config_path: str | Path,
-    library_override: Optional[str] = None,
+    library_override: str | None = None,
 ) -> PlexConfig:
     kometa_path = Path(kometa_config_path).expanduser()
     if not kometa_path.exists():
@@ -61,7 +62,7 @@ def resolve_plex_config(
     timeout = int(plex_block.get("timeout", DEFAULT_PLEX_TIMEOUT))
 
     libraries_block = kometa_config.get("libraries")
-    library_name: Optional[str] = library_override
+    library_name: str | None = library_override
 
     if library_name:
         if isinstance(libraries_block, dict) and library_name not in libraries_block:
@@ -95,14 +96,14 @@ def resolve_plex_config(
 
 def connect_to_plex(
     config: PlexConfig,
-) -> "PlexServer":  # pragma: no cover - network I/O
+) -> PlexServer:  # pragma: no cover - network I/O
     from plexapi.server import PlexServer
 
     return PlexServer(config.url, config.token, timeout=config.timeout)
 
 
-def build_tmdb_library_index(library) -> Set[str]:
-    tmdb_ids: Set[str] = set()
+def build_tmdb_library_index(library) -> set[str]:
+    tmdb_ids: set[str] = set()
     for item in library.all():
         tmdb_id = extract_tmdb_id_from_item(item)
         if tmdb_id:
@@ -110,7 +111,7 @@ def build_tmdb_library_index(library) -> Set[str]:
     return tmdb_ids
 
 
-def extract_tmdb_id_from_item(item) -> Optional[str]:  # pragma: no cover - thin wrapper
+def extract_tmdb_id_from_item(item) -> str | None:  # pragma: no cover - thin wrapper
     if not hasattr(item, "guids"):
         return None
     for guid in getattr(item, "guids", []):
@@ -122,6 +123,6 @@ def extract_tmdb_id_from_item(item) -> Optional[str]:  # pragma: no cover - thin
 
 def count_available_tmdb_ids(
     tmdb_ids: Iterable[str],
-    library_index: Set[str],
+    library_index: set[str],
 ) -> int:
     return sum(1 for tmdb_id in tmdb_ids if tmdb_id in library_index)

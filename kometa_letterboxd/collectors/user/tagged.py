@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
-from common.kometa import build_collection_entry
+from kometa_letterboxd.common.kometa import build_collection_entry
+
 from .lists import to_letterboxd_url
 
 

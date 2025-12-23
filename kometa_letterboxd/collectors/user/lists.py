@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import datetime
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, List, Tuple
 
 import requests
 from bs4 import BeautifulSoup
 
-from common.cache import load_lists, save_lists
+from kometa_letterboxd.common.cache import load_lists, save_lists
 
 LETTERBOXD_BASE = "https://letterboxd.com"
 LIST_HREF_PATTERN = re.compile(r"^/[^/]+/list/[^/]+/$")
@@ -29,14 +29,14 @@ def fetch_user_lists(
     *,
     timeout: int = 30,
     session: requests.Session | None = None,
-) -> List[Tuple[str, str, List[str]]]:
+) -> list[tuple[str, str, list[str]]]:
     if not username:
         raise ValueError("Username is required to fetch Letterboxd lists")
 
     owns_session = session is None
     ses = session or requests.Session()
 
-    lists: List[Tuple[str, str, List[str]]] = []
+    lists: list[tuple[str, str, list[str]]] = []
     page = 1
 
     try:
@@ -50,7 +50,7 @@ def fetch_user_lists(
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, "html.parser")
-            page_lists: List[Tuple[str, str, List[str]]] = []
+            page_lists: list[tuple[str, str, list[str]]] = []
 
             for link in soup.find_all("a", href=LIST_HREF_PATTERN):
                 title = (link.text or "").strip()
@@ -86,13 +86,13 @@ def ensure_user_lists(
     timeout: int = 30,
     refresh: bool = False,
     days_before: int = 0,
-) -> List[Tuple[str, str, List[str]]]:
+) -> list[tuple[str, str, list[str]]]:
     path = Path(cache_path).expanduser() if cache_path else None
 
     if path and not refresh:
         cached = load_lists(path)
         if cached:
-            # Check if cache has a dated list from the effective current month (with offset)
+            # Check if cache has a dated list from the effective current month
             today = datetime.date.today()
             offset_date = today + datetime.timedelta(days=days_before)
             current_month_str = offset_date.strftime("%B, %Y")
