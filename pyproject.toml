@@ -35,7 +35,7 @@ dev = [
 ]
 
 [project.scripts]
-kometa-letterboxd = "kometa_letterboxd.cli:cli_main"
+kometa-letterboxd = "kometa_letterboxd.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["kometa_letterboxd"]
