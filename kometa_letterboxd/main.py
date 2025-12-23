@@ -20,16 +20,10 @@ from kometa_letterboxd.common.kometa import write_collections_section
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Generate Kometa collections from Letterboxd lists"
+        description="generate Kometa collections from Letterboxd lists"
     )
-    parser.add_argument(
-        "--config",
-        help=(
-            "Path to the Letterboxd helper configuration file. "
-            "If omitted, the script falls back to the"
-            " $LETTERBOXD_HELPER_CONFIG environment variable."
-        ),
-    )
+    parser.add_argument("-c", "--config", help="path to configuration file")
+    parser.add_argument("-d", "--data", help="path to data directory for caches")
     return parser.parse_args()
 
 
@@ -102,9 +96,11 @@ def main():
     if not config:
         sys.exit(1)
 
+    data_dir = args.data or os.environ.get("LETTERBOXD_HELPER_DATA") or "data"
+
     username = config.get("username")
     request_timeout = config.get("request_timeout", 30)
-    lists_cache_path = config.get("lists_cache", "data/user/dated.json")
+    lists_cache_path = config.get("lists_cache", f"{data_dir}/user/dated.json")
     refresh_lists = bool(config.get("refresh_lists", False))
 
     kometa_cfg = config.get("kometa", {})
