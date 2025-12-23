@@ -1,20 +1,22 @@
-# kometa-letterboxd - Letterboxd Showdowns in Plex
+# kometa-letterboxd
 
-Letterboxd Showdowns in Plex through Kometa.
+Generate Kometa collections from Letterboxd lists, Showdowns, and dated collections.
+
+## Installation
+
+Install as a Python tool:
+
+```bash
+uv tool install /path/to/kometa-letterboxd
+```
 
 ## Usage
 
-Initialize the project (Debian example)
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+kometa-letterboxd --config config.yml
 ```
 
-The main command is
-```bash
-python letterboxd.py --config config.yml
-```
+See `config.example.yml` for configuration options.
 
 ### Background
 
@@ -72,39 +74,21 @@ This is restrained by:
 
 You can of course set the window size to 1, `[X]`, if you only want the spotlight.
 
-### Usage
-
-Better to use the configuration files, but here's a demonstration of the command line usage:
-
-```bash
-# via config file
-python letterboxd.py --config config.yml
-
-# via CLI
-python3 -m lists.showdown_plex \
-     --config config.yml \
-     --showdown-json showdown.json \
-     --threshold 6 \
-     --sort matches_desc \
-     --window 5 \
-     --label "Showdown Spotlight"
-```
+### Configuration
 
 See `config.example.yml` for an example config file. You can either reference your Kometa config file in your `config.yml`, or input your Plex token directly.
 
-The first run will take around 30 minutes. The subsequent runs will only update when new, finished Showdowns post on Letterboxd.
+The first run will take around 30 minutes. The subsequent runs will only update when new, finished Showdowns post on Letterboxd. A pre-cache may be made externally available with enough interest.
 
 ```
 data
 ├── featured
-│   └── showdown
-│       ├── cache.json
-│       └── rotation.json
+│   └── showdown
+│       ├── cache.json
+│       └── rotation.json
 └── user
     └── dated.json
 ```
-
-To avoid polluting the Git history, the cache file will be made available for annex at a later date.
 
 ### Repo Structure
 
@@ -112,32 +96,30 @@ This tool is external to Kometa and simply builds caches and compatible configur
 
 ```
 .
-├── collectors
-│   ├── featured
-│   │   └── showdown
-│   │       ├── __init__.py         # main showdown job runner
-│   │       ├── probe.py            # fetch and cache letterboxd's showdown dataset
-│   │       └── storage.py          # how to effectively store (helper)
-│   └── user
-│       ├── dated.py                # special dated lists
-│       ├── lists.py                # user lists, in general
-│       └── tagged.py               # tagged lists on letterboxd
-├── common
-│   ├── cache.py                    # json storage of letterboxd data (in general)
-│   ├── kometa.py                   # build kometa-flavored yaml for direct use in Kometa
-│   └── plex.py                     # purely an interface with plex
+├── kometa_letterboxd/              # all application code
+│   ├── main.py                     # entry point, orchestrator
+│   ├── collectors/
+│   │   ├── featured/
+│   │   │   └── showdown/
+│   │   │       ├── probe.py        # fetch and cache letterboxd's showdown cache.json
+│   │   │       └── storage.py      # how to effectively store (helper)
+│   │   └── user/
+│   │       ├── dated.py            # special dated lists
+│   │       ├── lists.py            # user lists, in general
+│   │       └── tagged.py           # tagged lists on letterboxd
+│   └── common/
+│       ├── cache.py                # json storage of letterboxd data
+│       ├── kometa.py               # build kometa-flavored yaml for direct use in Kometa
+│       └── plex.py                 # interface with plex
 ├── config.example.yml
 ├── config.yml                      # user config for this repo only; not kometa
-├── data                            # created. TODO: move to annex/ or ~/.local/share
-│   ├── featured
-│   │   └── showdown
-│   │       ├── cache.json          # generated from letterboxd.com/showdown/ (30 minute run)
-│   │       └── rotation.json       # showdown rotation state (sliding visibility window)
-│   └── user
-│       └── dated.json              # letterboxd list shape: "favorite movies - August, 2022"
-├── letterboxd.py                   # main orchestrator
-├── README.md
-└── requirements.txt
+└── data                            # created. TODO: move to annex/ or ~/.local/share
+    ├── featured
+    │   └── showdown
+    │       ├── cache.json          # generated from letterboxd.com/showdown/ (30 minute run)
+    │       └── rotation.json       # showdown rotation state (sliding visibility window)
+    └── user
+        └── dated.json              # letterboxd list shape: "favorite movies - August, 2022"
 ```
 
 ### License
