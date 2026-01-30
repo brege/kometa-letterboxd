@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "kometa-letterboxd"
 version = "0.1"
-description = "Generate Kometa collections from Letterboxd lists and Showdowns"
+description = "Generate Kometa collections from Letterboxd Showdowns and other User Lists"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -17,6 +17,7 @@ dependencies = [
   "requests>=2.31.0",
   "beautifulsoup4>=4.12.0",
   "plexapi>=4.17.1",
+  "cloudscraper>=1.2.71",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",

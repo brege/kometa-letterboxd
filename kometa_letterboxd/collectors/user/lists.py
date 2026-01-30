@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import datetime
 import re
+import time
 from collections.abc import Iterable
 from pathlib import Path
 
+import cloudscraper
 import requests
 from bs4 import BeautifulSoup
 
@@ -34,7 +36,7 @@ def fetch_user_lists(
         raise ValueError("Username is required to fetch Letterboxd lists")
 
     owns_session = session is None
-    ses = session or requests.Session()
+    ses = session or cloudscraper.create_scraper()
 
     lists: list[tuple[str, str, list[str]]] = []
     page = 1
@@ -47,6 +49,12 @@ def fetch_user_lists(
                 url = f"{LETTERBOXD_BASE}/{username}/lists/page/{page}/"
 
             response = ses.get(url, timeout=timeout)
+
+            if response.status_code == 403:
+                time.sleep(3)
+                ses = cloudscraper.create_scraper()
+                response = ses.get(url, timeout=timeout)
+
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, "html.parser")
