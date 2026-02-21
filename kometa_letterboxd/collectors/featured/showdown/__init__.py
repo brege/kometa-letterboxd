@@ -58,7 +58,7 @@ class ShowdownAvailability:
 
 
 def generate_showdown_collections(
-    _all_lists: Sequence[Sequence[str]],
+    _all_lists: Sequence[object],
     showdown_config: Mapping[str, Any],
     *,
     base_path: Path,

@@ -5,10 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, cast
 from urllib.parse import urljoin
 
 import requests
@@ -39,7 +39,7 @@ class ShowdownSummary:
     background_image: str | None = None
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, object]) -> ShowdownSummary:
+    def from_dict(cls, data: Mapping[str, Any]) -> ShowdownSummary:
         return cls(
             slug=str(data.get("slug", "")),
             title=str(data.get("title", "")),
@@ -63,7 +63,7 @@ class ShowdownEntry:
     tmdb_id: str | None = None
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, object]) -> ShowdownEntry:
+    def from_dict(cls, data: Mapping[str, Any]) -> ShowdownEntry:
         rank_value = data.get("rank", 0)
         try:
             rank_int = int(rank_value)
@@ -103,19 +103,25 @@ class ShowdownDataset:
         return any(not entry.tmdb_id for entry in self.entries)
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, object]) -> ShowdownDataset:
+    def from_dict(cls, data: Mapping[str, Any]) -> ShowdownDataset:
         summary_data = (
-            data.get("summary") if isinstance(data.get("summary"), Mapping) else {}
+            cast(Mapping[str, Any], data.get("summary"))
+            if isinstance(data.get("summary"), Mapping)
+            else {}
         )
         summary = ShowdownSummary.from_dict(summary_data)
         raw_entries = (
-            data.get("entries") if isinstance(data.get("entries"), Sequence) else []
+            cast(Sequence[Any], data.get("entries"))
+            if isinstance(data.get("entries"), Sequence)
+            else []
         )
         entries: list[ShowdownEntry] = []
         for item in raw_entries:
             if isinstance(item, Mapping):
                 try:
-                    entries.append(ShowdownEntry.from_dict(item))
+                    entries.append(
+                        ShowdownEntry.from_dict(cast(Mapping[str, Any], item))
+                    )
                 except Exception:
                     continue
         published_at = (
@@ -176,9 +182,10 @@ def parse_showdown_index(html: str) -> list[ShowdownSummary]:
     seen_slugs = set()
 
     for anchor in soup.select("section.content-teaser a.image"):
-        href = anchor.get("href")
-        if not href or not href.startswith("/showdown/"):
+        href_value = anchor.get("href")
+        if not isinstance(href_value, str) or not href_value.startswith("/showdown/"):
             continue
+        href = href_value
         slug = href.strip("/").split("/")[-1]
         if not slug or slug in seen_slugs:
             continue
@@ -230,7 +237,9 @@ def parse_showdown_crew_list(html: str) -> tuple[str | None, list[ShowdownEntry]
     published_at = None
     published_time = soup.select_one("p.list-date time")
     if published_time and published_time.has_attr("datetime"):
-        published_at = published_time["datetime"].strip() or None
+        published_value = published_time.get("datetime")
+        if isinstance(published_value, str):
+            published_at = published_value.strip() or None
 
     entries: list[ShowdownEntry] = []
     for li in soup.select("li.posteritem"):
@@ -238,10 +247,11 @@ def parse_showdown_crew_list(html: str) -> tuple[str | None, list[ShowdownEntry]
         if not component:
             continue
 
-        name = component.get("data-item-name", "").strip()
-        slug = component.get("data-item-slug", "").strip()
-        link = component.get("data-item-link", "").strip()
-        details_endpoint = component.get("data-details-endpoint")
+        name = str(component.get("data-item-name", "")).strip()
+        slug = str(component.get("data-item-slug", "")).strip()
+        link = str(component.get("data-item-link", "")).strip()
+        details_value = component.get("data-details-endpoint")
+        details_endpoint = details_value if isinstance(details_value, str) else None
         film_url = urljoin(BASE_URL, link) if link else ""
 
         year = _extract_year_from_name(name)
@@ -273,8 +283,10 @@ def _extract_tmdb_id_from_film_page(html: str) -> str | None:
     soup = BeautifulSoup(html, "html.parser")
     body = soup.find("body")
     if body and body.has_attr("data-tmdb-id"):
-        tmdb_id = body["data-tmdb-id"].strip()
-        return tmdb_id or None
+        tmdb_value = body.get("data-tmdb-id")
+        if isinstance(tmdb_value, str):
+            tmdb_id = tmdb_value.strip()
+            return tmdb_id or None
     return None
 
 

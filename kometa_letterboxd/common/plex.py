@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import yaml
 
@@ -24,7 +24,7 @@ class PlexConfig:
     library: str = "Movies"
 
 
-def _load_yaml(path: Path) -> dict[str, object]:
+def _load_yaml(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle) or {}
     if not isinstance(data, dict):
@@ -32,7 +32,7 @@ def _load_yaml(path: Path) -> dict[str, object]:
     return data
 
 
-def load_letterboxd_config(config_path: str | Path) -> dict[str, object]:
+def load_letterboxd_config(config_path: str | Path) -> dict[str, Any]:
     expanded = Path(config_path).expanduser()
     return _load_yaml(expanded)
 
@@ -50,9 +50,10 @@ def resolve_plex_config(
     if not isinstance(kometa_config, dict):
         raise ValueError(f"Unexpected Kometa configuration structure in {kometa_path}")
 
-    plex_block = kometa_config.get("plex")
-    if not isinstance(plex_block, dict):
+    plex_block_raw = kometa_config.get("plex")
+    if not isinstance(plex_block_raw, dict):
         raise ValueError(f"Kometa config '{kometa_path}' is missing a 'plex' section")
+    plex_block = cast(dict[str, Any], plex_block_raw)
 
     token = plex_block.get("token")
     if not token:
@@ -61,7 +62,12 @@ def resolve_plex_config(
     url = str(plex_block.get("url", DEFAULT_PLEX_URL))
     timeout = int(plex_block.get("timeout", DEFAULT_PLEX_TIMEOUT))
 
-    libraries_block = kometa_config.get("libraries")
+    libraries_block_raw = kometa_config.get("libraries")
+    libraries_block = (
+        cast(dict[str, Any], libraries_block_raw)
+        if isinstance(libraries_block_raw, dict)
+        else None
+    )
     library_name: str | None = library_override
 
     if library_name:

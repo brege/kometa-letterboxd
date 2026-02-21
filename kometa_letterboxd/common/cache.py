@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Mapping
 from pathlib import Path
+from typing import Any
 
 
-def load_lists(cache_path: str | Path) -> list[Mapping[str, object]]:
+def load_lists(cache_path: str | Path) -> list[Mapping[str, Any]]:
     """Return cached Letterboxd lists if the cache exists."""
 
     path = Path(cache_path).expanduser()
@@ -25,7 +26,7 @@ def load_lists(cache_path: str | Path) -> list[Mapping[str, object]]:
     if not isinstance(raw, list):
         return []
 
-    result: list[Mapping[str, object]] = []
+    result: list[Mapping[str, Any]] = []
     for entry in raw:
         if (
             isinstance(entry, Mapping)
@@ -36,7 +37,7 @@ def load_lists(cache_path: str | Path) -> list[Mapping[str, object]]:
     return result
 
 
-def save_lists(cache_path: str | Path, lists: Iterable[Mapping[str, object]]) -> None:
+def save_lists(cache_path: str | Path, lists: Iterable[Mapping[str, Any]]) -> None:
     """Persist Letterboxd lists so subsequent runs can skip HTTP fetches."""
 
     path = Path(cache_path).expanduser()

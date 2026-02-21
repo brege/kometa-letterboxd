@@ -7,6 +7,7 @@ import re
 import time
 from collections.abc import Iterable
 from pathlib import Path
+from typing import cast
 
 import cloudscraper
 import requests
@@ -61,8 +62,11 @@ def fetch_user_lists(
             page_lists: list[tuple[str, str, list[str]]] = []
 
             for link in soup.find_all("a", href=LIST_HREF_PATTERN):
-                title = (link.text or "").strip()
-                href = link.get("href") or ""
+                title = str(link.text or "").strip()
+                href_value = link.get("href")
+                if not isinstance(href_value, str):
+                    continue
+                href = href_value
                 if not title or not href:
                     continue
 
@@ -114,7 +118,7 @@ def ensure_user_lists(
                     (
                         str(item.get("title")),
                         str(item.get("url_suffix")),
-                        list(item.get("tags", [])),
+                        list(cast(Iterable[str], item.get("tags", []))),
                     )
                     for item in cached
                 ]

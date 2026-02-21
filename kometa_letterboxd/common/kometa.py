@@ -25,7 +25,7 @@ def build_collection_entry(
     source: str | Sequence[str] | Iterable[str],
     *,
     sort_title: str,
-    collection_order: str = "custom",
+    collection_order: str | None = "custom",
     sync_mode: str = "sync",
     summary: str | None = None,
     visible_library: bool | None = None,
@@ -70,7 +70,7 @@ def build_collection_entry(
 
 def write_collections_section(
     destination: str | Path,
-    collections: dict[str, dict[str, object]],
+    collections: Mapping[str, Mapping[str, object]],
     *,
     generator: str,
     config_source: str | Path,
