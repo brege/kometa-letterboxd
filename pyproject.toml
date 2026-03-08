@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kometa-letterboxd"
-version = "0.2"
+version = "0.3"
 description = "Generate Kometa collections from Letterboxd Showdowns and other User Lists"
 readme = "README.md"
 license = "MIT"

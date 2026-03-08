@@ -147,7 +147,7 @@ wheels = [
 
 [[package]]
 name = "kometa-letterboxd"
-version = "0.2"
+version = "0.3"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
