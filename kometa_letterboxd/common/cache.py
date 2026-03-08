@@ -15,25 +15,21 @@ def load_lists(cache_path: str | Path) -> list[Mapping[str, Any]]:
     if not path.exists():
         return []
 
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            raw = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return []
+    with path.open("r", encoding="utf-8") as handle:
+        raw = json.load(handle)
 
     if isinstance(raw, dict):
         raw = raw.get("lists", [])
     if not isinstance(raw, list):
-        return []
+        raise ValueError(f"Unexpected cache structure in {path}")
 
     result: list[Mapping[str, Any]] = []
     for entry in raw:
-        if (
-            isinstance(entry, Mapping)
-            and entry.get("title")
-            and entry.get("url_suffix")
-        ):
-            result.append(entry)
+        if not isinstance(entry, Mapping):
+            raise ValueError(f"Unexpected cache entry in {path}")
+        if not entry.get("title") or not entry.get("url_suffix"):
+            raise ValueError(f"Incomplete cache entry in {path}")
+        result.append(entry)
     return result
 
 

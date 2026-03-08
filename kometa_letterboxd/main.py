@@ -1,9 +1,9 @@
 import argparse
 import os
-import sys
 from pathlib import Path
 
 import yaml
+from pydantic import ValidationError
 
 from kometa_letterboxd.collectors.featured.showdown import generate_showdown_collections
 from kometa_letterboxd.collectors.user.dated import (
@@ -15,6 +15,7 @@ from kometa_letterboxd.collectors.user.tagged import (
     generate_tagged_collections,
     get_lists_with_tag,
 )
+from kometa_letterboxd.common.config import load_config, resolve_path
 from kometa_letterboxd.common.kometa import write_collections_section
 
 
@@ -28,44 +29,13 @@ def parse_args():
 
 
 def determine_config_path(cli_path):
-    if cli_path:
-        candidate = Path(cli_path).expanduser()
-        if candidate.exists():
-            return candidate
-        print(f"Error: configuration file not found at {candidate}", file=sys.stderr)
-        sys.exit(1)
-
-    env_value = os.environ.get("LETTERBOXD_HELPER_CONFIG")
-    if env_value:
-        candidate = Path(env_value).expanduser()
-        if candidate.exists():
-            return candidate
-        print(f"Error: configuration file not found at {candidate}", file=sys.stderr)
-        sys.exit(1)
-
-    msg = (
+    candidate = cli_path or os.environ.get("LETTERBOXD_HELPER_CONFIG")
+    if candidate:
+        return Path(candidate).expanduser()
+    raise SystemExit(
         "Error: no configuration path provided. Use --config or set "
         "LETTERBOXD_HELPER_CONFIG."
     )
-    print(msg, file=sys.stderr)
-    sys.exit(1)
-
-
-def load_config(config_path):
-    try:
-        with config_path.open("r") as file:
-            config = yaml.safe_load(file)
-        print(f"Configuration loaded from {config_path}")
-        return config
-    except FileNotFoundError:
-        print(f"Error: configuration file not found at {config_path}", file=sys.stderr)
-        return None
-    except yaml.YAMLError as exc:
-        print(f"Error parsing configuration file {config_path}: {exc}", file=sys.stderr)
-        return None
-    except Exception as exc:
-        print(f"Unexpected error loading config {config_path}: {exc}", file=sys.stderr)
-        return None
 
 
 def ensure_kometa_file(path: Path) -> Path:
@@ -91,97 +61,57 @@ def ensure_kometa_file(path: Path) -> Path:
 def main():
     args = parse_args()
     config_path = determine_config_path(args.config)
-    config = load_config(config_path)
-
-    if not config:
-        sys.exit(1)
+    try:
+        config = load_config(config_path)
+    except FileNotFoundError as exc:
+        raise SystemExit(f"Error: configuration file not found at {exc.filename}") from exc
+    except yaml.YAMLError as exc:
+        raise SystemExit(f"Error parsing configuration file {config_path}: {exc}") from exc
+    except ValidationError as exc:
+        raise SystemExit(str(exc)) from exc
 
     data_dir = args.data or os.environ.get("LETTERBOXD_HELPER_DATA") or "data"
-
-    username = config.get("username")
-    request_timeout = config.get("request_timeout", 30)
-    lists_cache_path = config.get("lists_cache", f"{data_dir}/user/dated.json")
-    refresh_lists = bool(config.get("refresh_lists", False))
-
-    kometa_cfg = config.get("kometa", {})
-    kometa_config_path: Path | None = None
-    if isinstance(kometa_cfg, dict):
-        raw_kometa_path = kometa_cfg.get("config_path")
-        if raw_kometa_path:
-            expanded = Path(str(raw_kometa_path)).expanduser()
-            if not expanded.is_absolute():
-                expanded = (config_path.parent / expanded).resolve()
-            kometa_config_path = expanded
-
-    dated_cfg = config.get("dated", {})
-    kometa_destination = dated_cfg.get("kometa_destination") or dated_cfg.get(
-        "kometa_target"
+    lists_cache_path = config.lists_cache or f"{data_dir}/user/dated.json"
+    kometa_config_path = resolve_path(config.kometa.config_path, config_path.parent)
+    kometa_destination = resolve_path(
+        config.dated.kometa_destination,
+        config_path.parent,
     )
-    letterboxd_prefix = dated_cfg.get("letterboxd_prefix", "")
-    plex_prefix = dated_cfg.get("plex_prefix", "")
-    days_before = dated_cfg.get("days_before", 0)
-    raw_collection_extra = dated_cfg.get("collection_extra")
-    entry_extra = raw_collection_extra if isinstance(raw_collection_extra, dict) else {}
-    raw_extended_extra = dated_cfg.get("extended_extra")
-    extended_extra = raw_extended_extra if isinstance(raw_extended_extra, dict) else {}
-
-    tagged_cfg = config.get("tagged", {})
-    tag = tagged_cfg.get("tag", "")
-    raw_tagged_extra = tagged_cfg.get("extra")
-    tagged_extra = raw_tagged_extra if isinstance(raw_tagged_extra, dict) else {}
-
-    showdown_cfg = config.get("showdown", {})
-
-    if not username:
-        print("Error: Letterboxd username not specified in config.", file=sys.stderr)
-        sys.exit(1)
-
-    if not kometa_destination:
-        print(
-            "Error: 'dated.kometa_destination' not specified in config.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
 
     print("Starting Letterboxd list fetcher...")
 
     default_destination = ensure_kometa_file(kometa_destination)
-
-    try:
-        all_user_lists = ensure_user_lists(
-            username,
-            cache_path=lists_cache_path,
-            timeout=request_timeout,
-            refresh=refresh_lists,
-            days_before=days_before,
-        )
-    except Exception as exc:
-        print(
-            "Failed to retrieve user lists. Kometa config file not updated.",
-            file=sys.stderr,
-        )
-        print(f"Details: {exc}", file=sys.stderr)
-        sys.exit(1)
+    all_user_lists = ensure_user_lists(
+        config.username,
+        cache_path=lists_cache_path,
+        timeout=config.request_timeout,
+        refresh=config.refresh_lists,
+        days_before=config.dated.days_before,
+    )
 
     all_collections = {}
 
-    dated_lists = get_dated_lists(all_user_lists, letterboxd_prefix, days_before)
+    dated_lists = get_dated_lists(
+        all_user_lists,
+        config.dated.letterboxd_prefix,
+        config.dated.days_before,
+    )
     if dated_lists:
         dated_collections = generate_dated_collections(
             dated_lists,
-            letterboxd_prefix,
-            plex_prefix,
-            days_before,
-            entry_extra=entry_extra,
-            extended_extra=extended_extra,
+            config.dated.letterboxd_prefix,
+            config.dated.plex_prefix,
+            config.dated.days_before,
+            entry_extra=config.dated.collection_extra,
+            extended_extra=config.dated.extended_extra,
         )
         all_collections.update(dated_collections)
 
-    tagged_lists = get_lists_with_tag(all_user_lists, tag)
+    tagged_lists = get_lists_with_tag(all_user_lists, config.tagged.tag)
     if tagged_lists:
         tagged_collections = generate_tagged_collections(
             tagged_lists,
-            extra=tagged_extra,
+            extra=config.tagged.extra,
         )
         all_collections.update(tagged_collections)
 
@@ -190,7 +120,7 @@ def main():
     showdown_collections, showdown_destination, showdown_retired = (
         generate_showdown_collections(
             all_user_lists,
-            showdown_cfg,
+            config.showdown,
             base_path=config_path.parent,
             kometa_config_path=kometa_config_path,
             config_source=config_path,
@@ -203,43 +133,29 @@ def main():
             all_collections.update(showdown_collections)
             showdown_delete = showdown_retired
         else:
-            try:
-                ensured_target = ensure_kometa_file(target_path)
-                write_collections_section(
-                    ensured_target,
-                    showdown_collections,
-                    generator=f"{Path(__file__).name} showdown",
-                    config_source=config_path,
-                    delete_collections_named=showdown_retired,
-                )
-                print(f"Showdown collections written to {ensured_target}")
-            except Exception as exc:
-                print(
-                    f"Error updating showdown Kometa file {target_path}: {exc}",
-                    file=sys.stderr,
-                )
+            ensured_target = ensure_kometa_file(target_path)
+            write_collections_section(
+                ensured_target,
+                showdown_collections,
+                generator=f"{Path(__file__).name} showdown",
+                config_source=config_path,
+                delete_collections_named=showdown_retired,
+            )
+            print(f"Showdown collections written to {ensured_target}")
             showdown_delete = []
 
     delete_collections_named: list[str] = []
     if showdown_delete:
         delete_collections_named.extend(showdown_delete)
 
-    try:
-        write_collections_section(
-            default_destination,
-            all_collections,
-            generator=Path(__file__).name,
-            config_source=config_path,
-            delete_collections_named=delete_collections_named or None,
-        )
-        print(
-            f"\nKometa config file {kometa_destination} has been updated successfully."
-        )
-    except Exception as exc:
-        print(
-            f"Error updating Kometa config file {kometa_destination}: {exc}",
-            file=sys.stderr,
-        )
+    write_collections_section(
+        default_destination,
+        all_collections,
+        generator=Path(__file__).name,
+        config_source=config_path,
+        delete_collections_named=delete_collections_named or None,
+    )
+    print(f"\nKometa config file {kometa_destination} has been updated successfully.")
 
 
 if __name__ == "__main__":

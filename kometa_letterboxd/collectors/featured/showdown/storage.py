@@ -5,41 +5,40 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from kometa_letterboxd.common.config import resolve_path
 
 
-def resolve_path(raw: Any, base_path: Path) -> Path | None:
-    """Resolve a showdown-relative path against the collector base path."""
+class ShowdownState(BaseModel):
+    model_config = ConfigDict(extra="ignore")
 
-    if not raw:
-        return None
-    candidate = Path(str(raw)).expanduser()
-    if not candidate.is_absolute():
-        candidate = (base_path / candidate).resolve()
-    return candidate
+    window_position: int = 0
+    collection_lifecycles: dict[str, Literal["spotlight", "library", "retire"]] = (
+        Field(default_factory=dict)
+    )
+    collection_titles: dict[str, str] = Field(default_factory=dict)
 
 
 def load_showdown_datasets(path: Path) -> list[Mapping[str, Any]]:
     """Load showdown datasets from the cached JSON payload."""
 
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"Showdown: unable to read dataset {path}: {exc}")
-        return []
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
 
     if isinstance(payload, dict) and "showdowns" in payload:
         payload = payload.get("showdowns")
 
     if not isinstance(payload, Sequence):
-        print("Showdown: unexpected dataset structure; expected a list of items.")
-        return []
+        raise ValueError(f"Unexpected showdown dataset structure in {path}")
 
     datasets: list[Mapping[str, Any]] = []
     for item in payload:
-        if isinstance(item, Mapping):
-            datasets.append(item)
+        if not isinstance(item, Mapping):
+            raise ValueError(f"Unexpected showdown dataset entry in {path}")
+        datasets.append(item)
     return datasets
 
 
@@ -48,31 +47,30 @@ def load_showdown_cache(path: Path) -> dict[str, dict[str, Any]]:
 
     if not path.exists():
         return {}
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return {}
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
 
     entries: Sequence[Mapping[str, Any]]
     if isinstance(payload, dict) and "showdowns" in payload:
         raw_entries = payload.get("showdowns")
-        entries = raw_entries if isinstance(raw_entries, Sequence) else []
+        if not isinstance(raw_entries, Sequence):
+            raise ValueError(f"Unexpected showdown cache structure in {path}")
+        entries = raw_entries
     elif isinstance(payload, Sequence):
         entries = payload
     else:
-        return {}
+        raise ValueError(f"Unexpected showdown cache structure in {path}")
 
     cache: dict[str, dict[str, Any]] = {}
     for entry in entries:
         if not isinstance(entry, Mapping):
-            continue
-        summary = entry.get("summary") if isinstance(entry, Mapping) else None
+            raise ValueError(f"Unexpected showdown cache entry in {path}")
+        summary = entry.get("summary")
         if not isinstance(summary, Mapping):
-            continue
+            raise ValueError(f"Unexpected showdown cache summary in {path}")
         slug = summary.get("slug")
         if not slug:
-            continue
+            raise ValueError(f"Missing showdown cache slug in {path}")
         cache[str(slug)] = dict(entry)
     return cache
 
@@ -86,28 +84,23 @@ def save_showdown_cache(path: Path, cache: Mapping[str, Mapping[str, Any]]) -> N
         json.dump(payload, handle, indent=2, sort_keys=False)
 
 
-def load_state(path: Path) -> dict[str, Any]:
+def load_state(path: Path) -> ShowdownState:
     """Load showdown rotation state from disk."""
 
     if not path.exists():
-        return {}
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    return data
+        return ShowdownState()
+    with path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    return ShowdownState.model_validate(data)
 
 
-def save_state(path: Path, data: Mapping[str, Any]) -> None:
+def save_state(path: Path, data: ShowdownState) -> None:
     """Persist showdown rotation state to disk."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         json.dump(
-            dict(data),
+            data.model_dump(),
             handle,
             indent=2,
             sort_keys=True,

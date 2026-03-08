@@ -113,7 +113,7 @@ def write_collections_section(
             .decode()
             .strip()
         )
-    except Exception:
+    except (OSError, subprocess.CalledProcessError):
         kometa_hash = "unknown"
 
     with output_path.open("w", encoding="utf-8") as handle:

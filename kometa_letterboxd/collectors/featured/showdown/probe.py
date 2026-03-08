@@ -118,12 +118,9 @@ class ShowdownDataset:
         entries: list[ShowdownEntry] = []
         for item in raw_entries:
             if isinstance(item, Mapping):
-                try:
-                    entries.append(
-                        ShowdownEntry.from_dict(cast(Mapping[str, Any], item))
-                    )
-                except Exception:
-                    continue
+                entries.append(
+                    ShowdownEntry.from_dict(cast(Mapping[str, Any], item))
+                )
         published_at = (
             data.get("published_at")
             if isinstance(data.get("published_at"), str)

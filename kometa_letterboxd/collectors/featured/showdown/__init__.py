@@ -11,6 +11,7 @@ from typing import Any
 import requests
 import yaml
 
+from kometa_letterboxd.common.config import ShowdownConfig
 from kometa_letterboxd.common.kometa import build_collection_entry
 from kometa_letterboxd.common.plex import (
     build_tmdb_library_index,
@@ -20,12 +21,13 @@ from kometa_letterboxd.common.plex import (
 )
 
 from .probe import refresh_showdown_cache
-from .storage import load_showdown_datasets, load_state, resolve_path, save_state
+from .storage import (
+    load_showdown_datasets,
+    load_state,
+    resolve_path,
+    save_state,
+)
 
-DEFAULT_THRESHOLD = 4
-DEFAULT_SORT_MODE = "matches_desc"
-DEFAULT_WINDOW = 5
-DEFAULT_LABEL = "Showdown Spotlight"
 DEFAULT_STATE_FILE = Path("data/featured/showdown/rotation.json")
 
 
@@ -59,19 +61,16 @@ class ShowdownAvailability:
 
 def generate_showdown_collections(
     _all_lists: Sequence[object],
-    showdown_config: Mapping[str, Any],
+    showdown_config: ShowdownConfig | None,
     *,
     base_path: Path,
     kometa_config_path: Path | None,
     config_source: Path,
 ) -> tuple[dict[str, MutableMapping[str, Any]], Path | None, list[str]]:
-    if not showdown_config:
+    if showdown_config is None:
         return {}, None, []
 
-    showdown_path = resolve_path(showdown_config.get("showdown_json"), base_path)
-    if not showdown_path:
-        print("Showdown: no dataset path configured; skipping showdown collections.")
-        return {}, None, []
+    showdown_path = resolve_path(showdown_config.showdown_json, base_path)
     if not showdown_path.exists():
         print(f"Showdown dataset not found at {showdown_path}; skipping generation.")
         return {}, None, []
@@ -81,79 +80,49 @@ def generate_showdown_collections(
         print("Showdown dataset contained no entries; skipping generation.")
         return {}, None, []
 
-    if kometa_config_path is None:
-        print(
-            "Showdown: no Kometa config path provided; skipping showdown collections."
-        )
-        return {}, None, []
+    plex_config = resolve_plex_config(
+        kometa_config_path,
+        library_override=showdown_config.library,
+    )
+    plex_server = connect_to_plex(plex_config)
+    library = plex_server.library.section(plex_config.library)
+    tmdb_index = build_tmdb_library_index(library)
 
-    try:
-        plex_config = resolve_plex_config(
-            kometa_config_path,
-            library_override=showdown_config.get("library"),
-        )
-        plex_server = connect_to_plex(plex_config)
-        library = plex_server.library.section(plex_config.library)
-        tmdb_index = build_tmdb_library_index(library)
-    except Exception as exc:  # pragma: no cover - relies on Plex environment
-        print(f"Showdown: unable to evaluate Plex library ({exc}); skipping.")
-        return {}, None, []
-
-    threshold = int(showdown_config.get("threshold", DEFAULT_THRESHOLD))
-    availability = _evaluate_datasets(datasets, tmdb_index, threshold)
+    availability = _evaluate_datasets(datasets, tmdb_index, showdown_config.threshold)
     if not availability:
         print("Showdown: no datasets met the threshold; nothing to add.")
         return {}, None, []
 
-    sort_mode = str(showdown_config.get("sort", DEFAULT_SORT_MODE))
-    ordered = _sort_availability(availability, sort_mode)
+    ordered = _sort_availability(availability, showdown_config.sort)
 
-    window = int(showdown_config.get("window", DEFAULT_WINDOW))
-    if window <= 0:
-        print("Showdown: window size must be positive; skipping generation.")
-        return {}, None, []
-
-    state_path = resolve_path(showdown_config.get("state_file"), base_path)
+    state_path = resolve_path(showdown_config.state_file, base_path)
     if not state_path:
         state_path = (base_path / DEFAULT_STATE_FILE).resolve()
 
     state = load_state(state_path)
 
-    # Calculate sliding window based on spotlight progression
     selected, spotlight, next_spotlight_position = _select_sliding_window_and_spotlight(
-        ordered, window, state
+        ordered,
+        showdown_config.window,
+        state.window_position,
     )
-    label = str(showdown_config.get("label", DEFAULT_LABEL))
-
-    lifecycle_state = state.get("collection_lifecycles")
-    if not isinstance(lifecycle_state, dict):
-        lifecycle_state = {}
-    else:
-        lifecycle_state = {
-            str(slug): str(status) for slug, status in lifecycle_state.items()
-        }
+    label = showdown_config.label
 
     slug_title_map = _build_slug_title_map(datasets)
 
     _update_collection_lifecycles(
-        lifecycle_state,
+        state.collection_lifecycles,
         ordered,
         selected,
         spotlight,
     )
 
-    stored_titles = state.get("collection_titles")
-    if not isinstance(stored_titles, dict):
-        stored_titles = {}
-    stored_titles.update(slug_title_map)
-
-    state["collection_lifecycles"] = lifecycle_state
-    state["collection_titles"] = dict(stored_titles)
-    state["window_position"] = next_spotlight_position
+    state.collection_titles.update(slug_title_map)
+    state.window_position = next_spotlight_position
 
     retired_collection_names = _get_retired_collection_names(
-        lifecycle_state,
-        state.get("collection_titles"),
+        state.collection_lifecycles,
+        state.collection_titles,
     )
 
     collections = _build_collections(
@@ -162,22 +131,17 @@ def generate_showdown_collections(
         tmdb_index,
         spotlight,
         label,
-        lifecycle_state,
+        state.collection_lifecycles,
         retired_collection_names,
     )
 
     save_state(state_path, state)
 
-    # Download background images to asset directory if configured
-    asset_directory_config = showdown_config.get("asset_directory")
-    if asset_directory_config:
-        asset_path = resolve_path(asset_directory_config, base_path)
-        if asset_path:
-            _download_background_images(collections, datasets, asset_path)
+    if showdown_config.asset_directory:
+        asset_path = resolve_path(showdown_config.asset_directory, base_path)
+        _download_background_images(collections, datasets, asset_path)
 
-    destination_path = resolve_path(
-        showdown_config.get("kometa_destination"), base_path
-    )
+    destination_path = resolve_path(showdown_config.kometa_destination, base_path)
 
     return collections, destination_path, retired_collection_names
 
@@ -250,21 +214,13 @@ def _availability_sort_key(item: ShowdownAvailability) -> Any:
 def _select_sliding_window_and_spotlight(
     ordered: Sequence[ShowdownAvailability],
     window: int,
-    state: Mapping[str, Any],
+    current_spotlight_position: int,
 ) -> tuple[
     list[ShowdownAvailability],
     ShowdownAvailability | None,
     int,
 ]:
-    try:
-        current_spotlight_position = int(state.get("window_position", 0))
-    except (TypeError, ValueError):
-        current_spotlight_position = 0
-
     if not ordered:
-        return [], None, current_spotlight_position
-
-    if window <= 0:
         return [], None, current_spotlight_position
 
     # Ensure spotlight position is valid
@@ -539,8 +495,8 @@ def _download_background_images(
 
             print(f"  → Saved to {background_path}")
 
-        except Exception as e:
-            print(f"  ! Failed to download background for '{collection_name}': {e}")
+        except (OSError, requests.RequestException) as exc:
+            print(f"  ! Failed to download background for '{collection_name}': {exc}")
 
 
 def _write_manifest(
