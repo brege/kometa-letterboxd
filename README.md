@@ -7,7 +7,9 @@ Generate Kometa collections from Letterboxd lists, Showdowns, and dated collecti
 Install as a Python tool:
 
 ```bash
-uv tool install /path/to/kometa-letterboxd
+git clone https://github.com/brege/kometa-letterboxd
+cd kometa-letterboxd
+uv tool install .
 ```
 
 ## Usage
@@ -18,40 +20,34 @@ kometa-letterboxd --config config.yml
 
 See `config.example.yml` for configuration options.
 
-### Background
+## Background
 
 Surfacing content in a mature Plex library that is neither chaotically random nor repetitively ordered (imdb rating, date released, top 250 X) is a great challenge.
 
 This project interfaces Plex with Letterboxd through scripting *around* Kometa. This tool builds the Kometa config files to be batched with Kometa's normal job runs. The first two are rather simple, a monthly serial collection "group" and another to build a letterboxd-tagged collection. The third is more sophisticated, integrating [Letterboxd's Showdowns](https://letterboxd.com/showdown/) feature into a Plex library. I quite like this feature on Letterboxd. Seeing these lists without context is a cross-word-like game.
 
-#### List Builders
+### List Builders
 
-- [Dated](/lists/dated.py)
-  monthly Letterboxd lists of the form "favorite movies - August, 2022". Replaces the "favorite movies" with "new title", and can be made into a wrapper to dynamically build a monthly collection.
+- [Dated](/lists/dated.py):monthly Letterboxd lists of the form "favorite movies - August, 2022". Replaces the "favorite movies" with "new title", and can be made into a wrapper to dynamically build a monthly collection. This is a basic list builder I've provided to help you scaffold your own. It's too specific and probably not mush use to others.
 
-- [Tagged](/lists/tagged.py)
-  if you tag collections with "plex" on Letterboxd, this builder will create Kometa collections from these collections. These are handpicked films that are easier to pick and tease out of Letterboxd than anywhere else, especially compared to Plex.
+- [Tagged](/lists/tagged.py): if you tag collections with "plex" on Letterboxd, this builder will create Kometa collections from these collections. These are handpicked films that are easier to pick and tease out of Letterboxd than anywhere else, especially compared to Plex.
 
-- [Showdown](/lists/showdown.py)
-  this is a sophisticated method.  [Letterboxd Showdowns](https://letterboxd.com/showdown/) is a page of over 250 lists, each of which are constructed by a
-[motif](https://en.wikipedia.org/wiki/Motif_(narrative)) such as "Brief Encounter" or "Sense and Sensibility" that don't narrowly fit into a genre (War) or theme (political and human rights).
+- [Showdown](/lists/showdown.py): this is a sophisticated method. [Letterboxd Showdowns](https://letterboxd.com/showdown/) is a page of over 250 lists, each of which are constructed by a [motif](https://en.wikipedia.org/wiki/Motif_(narrative)) such as "Brief Encounter" or "Sense and Sensibility" that don't narrowly fit into a genre (War) or theme (political and human rights).
 
-  Importing a whole Showdown page, which Kometa can do, is problematic. These pages contain a lot of movies, from users, that do not fit the motif. Letterboxd staff cuts the aggregate list down to the 20 best represented movies for that motif.
-
+Importing a whole Showdown page, which Kometa can do, is problematic. These pages contain a lot of movies from users that definitely do not fit the motif. Letterboxd staff cuts the aggregate list down to the 20 best represented movies for that motif.
 
 ### Showdowns in Plex
 
 ![Letterboxd Showdowns in Plex](./showdowns.png)
 
 The showdowns listed here are:
-- [Intensive Care](https://letterboxd.com/showdown/intensive-care/)
-- [Sense and Sensibility](https://letterboxd.com/showdown/sense-and-sensibility/)
-- [A League of Their Own](https://letterboxd.com/showdown/a-league-of-their-own/)
+- **Intensive Care** - [letterboxd.com/showdown/intensive-care](https://letterboxd.com/showdown/intensive-care/)
+- **A League of Their Own** - [letterboxd.com/showdown/a-league-of-their-own](https://letterboxd.com/showdown/a-league-of-their-own/)
+- **Sense and Sensibility** - [letterboxd.com/showdown/sense-and-sensibility](https://letterboxd.com/showdown/sense-and-sensibility/)
 
 ### How Showdowns Work
 
-A moderate sized Plex collection will have ~50 possible showdown collections with 6 movies or more.
-If you tell this script to build every candidate Showdown collection, it will spam your Movies library with too many small collections.
+A moderate sized Plex collection (500-1000 titles) will have ~50 possible showdown collections with 6 movies or more. If you tell this script to build every candidate Showdown collection, it will spam your Movies library with too many small collections.
 
 This is restrained by:
 
@@ -78,49 +74,7 @@ You can of course set the window size to 1, `[X]`, if you only want the spotligh
 
 See `config.example.yml` for an example config file. You can either reference your Kometa config file in your `config.yml`, or input your Plex token directly.
 
-The first run will take around 30 minutes. The subsequent runs will only update when new, finished Showdowns post on Letterboxd. A pre-cache may be made externally available with enough interest.
-
-```
-data
-├── featured
-│   └── showdown
-│       ├── cache.json
-│       └── rotation.json
-└── user
-    └── dated.json
-```
-
-### Repo Structure
-
-This tool is external to Kometa and simply builds caches and compatible configuration files for Kometa to run on.
-
-```
-.
-├── kometa_letterboxd/              # all application code
-│   ├── main.py                     # entry point, orchestrator
-│   ├── collectors/
-│   │   ├── featured/
-│   │   │   └── showdown/
-│   │   │       ├── probe.py        # fetch and cache letterboxd's showdown cache.json
-│   │   │       └── storage.py      # how to effectively store (helper)
-│   │   └── user/
-│   │       ├── dated.py            # special dated lists
-│   │       ├── lists.py            # user lists, in general
-│   │       └── tagged.py           # tagged lists on letterboxd
-│   └── common/
-│       ├── cache.py                # json storage of letterboxd data
-│       ├── kometa.py               # build kometa-flavored yaml for direct use in Kometa
-│       └── plex.py                 # interface with plex
-├── config.example.yml
-├── config.yml                      # user config for this repo only; not kometa
-└── data                            # created. TODO: move to annex/ or ~/.local/share
-    ├── featured
-    │   └── showdown
-    │       ├── cache.json          # generated from letterboxd.com/showdown/ (30 minute run)
-    │       └── rotation.json       # showdown rotation state (sliding visibility window)
-    └── user
-        └── dated.json              # letterboxd list shape: "favorite movies - August, 2022"
-```
+The first run will take around 30 minutes. The subsequent runs will only update when new completed Showdowns appear on Letterboxd. A pre-cache may be made externally available with enough interest.
 
 ### License
 
