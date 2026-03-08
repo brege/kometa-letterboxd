@@ -6,7 +6,7 @@ import datetime
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import requests
 import yaml
@@ -29,6 +29,14 @@ from .storage import (
 )
 
 DEFAULT_STATE_FILE = Path("data/featured/showdown/rotation.json")
+LifecycleState = Literal["spotlight", "library", "retire"]
+
+
+def _resolve_required_path(raw_path: str | Path, base_path: Path) -> Path:
+    resolved = resolve_path(raw_path, base_path)
+    if resolved is None:
+        raise ValueError(f"Unable to resolve path {raw_path}")
+    return resolved
 
 
 @dataclass
@@ -70,7 +78,7 @@ def generate_showdown_collections(
     if showdown_config is None:
         return {}, None, []
 
-    showdown_path = resolve_path(showdown_config.showdown_json, base_path)
+    showdown_path = _resolve_required_path(showdown_config.showdown_json, base_path)
     if not showdown_path.exists():
         print(f"Showdown dataset not found at {showdown_path}; skipping generation.")
         return {}, None, []
@@ -80,6 +88,8 @@ def generate_showdown_collections(
         print("Showdown dataset contained no entries; skipping generation.")
         return {}, None, []
 
+    if kometa_config_path is None:
+        raise ValueError("Showdown requires kometa.config_path")
     plex_config = resolve_plex_config(
         kometa_config_path,
         library_override=showdown_config.library,
@@ -138,7 +148,10 @@ def generate_showdown_collections(
     save_state(state_path, state)
 
     if showdown_config.asset_directory:
-        asset_path = resolve_path(showdown_config.asset_directory, base_path)
+        asset_path = _resolve_required_path(
+            showdown_config.asset_directory,
+            base_path,
+        )
         _download_background_images(collections, datasets, asset_path)
 
     destination_path = resolve_path(showdown_config.kometa_destination, base_path)
@@ -273,7 +286,7 @@ def _build_slug_title_map(datasets: Iterable[Mapping[str, Any]]) -> dict[str, st
 
 
 def _update_collection_lifecycles(
-    collection_lifecycles: MutableMapping[str, str],
+    collection_lifecycles: MutableMapping[str, LifecycleState],
     ordered: Sequence[ShowdownAvailability],
     selected: Sequence[ShowdownAvailability],
     spotlight: ShowdownAvailability | None,
@@ -306,7 +319,7 @@ def _update_collection_lifecycles(
 
 
 def _get_retired_collection_names(
-    collection_lifecycles: Mapping[str, str],
+    collection_lifecycles: Mapping[str, LifecycleState],
     slug_to_title: Mapping[str, str] | None,
 ) -> list[str]:
     if not collection_lifecycles:
@@ -333,7 +346,7 @@ def _build_collections(
     tmdb_index: Iterable[str],
     spotlight: ShowdownAvailability | None,
     label: str,
-    collection_lifecycles: Mapping[str, str],
+    collection_lifecycles: Mapping[str, LifecycleState],
     retired_names: Sequence[str],
 ) -> dict[str, MutableMapping[str, Any]]:
     collections: dict[str, MutableMapping[str, Any]] = {}
@@ -401,7 +414,7 @@ def _build_collections(
         available_tmdb_ids = slug_to_tmdb_ids.get(item.slug, [])
 
         # Build extra dict with label
-        extra_dict = {"label": label}
+        extra_dict: dict[str, object] = {"label": label}
         if index == 0 and retired_names:
             extra_dict["delete_collections_named"] = list(dict.fromkeys(retired_names))
         # Note: background images are handled via asset directories, not YAML fields
@@ -509,7 +522,7 @@ def _write_manifest(
     window_size: int,
     retired_collections: Sequence[str] | None = None,
 ) -> None:
-    manifest_data = {
+    manifest_data: dict[str, object] = {
         "collections": {name: dict(value) for name, value in collections.items()},
     }
 

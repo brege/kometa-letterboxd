@@ -58,22 +58,33 @@ def ensure_kometa_file(path: Path) -> Path:
     return expanded
 
 
+def resolve_required_path(raw_path: str | Path, base_path: Path) -> Path:
+    resolved = resolve_path(raw_path, base_path)
+    if resolved is None:
+        raise ValueError(f"Unable to resolve path {raw_path}")
+    return resolved
+
+
 def main():
     args = parse_args()
     config_path = determine_config_path(args.config)
     try:
         config = load_config(config_path)
     except FileNotFoundError as exc:
-        raise SystemExit(f"Error: configuration file not found at {exc.filename}") from exc
+        raise SystemExit(
+            f"Error: configuration file not found at {exc.filename}"
+        ) from exc
     except yaml.YAMLError as exc:
-        raise SystemExit(f"Error parsing configuration file {config_path}: {exc}") from exc
+        raise SystemExit(
+            f"Error parsing configuration file {config_path}: {exc}"
+        ) from exc
     except ValidationError as exc:
         raise SystemExit(str(exc)) from exc
 
     data_dir = args.data or os.environ.get("LETTERBOXD_HELPER_DATA") or "data"
     lists_cache_path = config.lists_cache or f"{data_dir}/user/dated.json"
     kometa_config_path = resolve_path(config.kometa.config_path, config_path.parent)
-    kometa_destination = resolve_path(
+    kometa_destination = resolve_required_path(
         config.dated.kometa_destination,
         config_path.parent,
     )

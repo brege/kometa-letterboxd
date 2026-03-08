@@ -39,7 +39,7 @@ def generate_tagged_collections(
         "# visible_home": "true/false # <-- Configure visibility manually",
         "# visible_shared": "true/false # <-- Configure visibility manually",
     }
-    merged_extra = dict(base_extra)
+    merged_extra: dict[str, object] = dict(base_extra)
     if isinstance(extra, Mapping):
         merged_extra.update(extra)
 

@@ -16,8 +16,8 @@ class ShowdownState(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     window_position: int = 0
-    collection_lifecycles: dict[str, Literal["spotlight", "library", "retire"]] = (
-        Field(default_factory=dict)
+    collection_lifecycles: dict[str, Literal["spotlight", "library", "retire"]] = Field(
+        default_factory=dict
     )
     collection_titles: dict[str, str] = Field(default_factory=dict)
 
@@ -105,3 +105,14 @@ def save_state(path: Path, data: ShowdownState) -> None:
             indent=2,
             sort_keys=True,
         )
+
+
+__all__ = [
+    "ShowdownState",
+    "load_showdown_cache",
+    "load_showdown_datasets",
+    "load_state",
+    "resolve_path",
+    "save_showdown_cache",
+    "save_state",
+]
