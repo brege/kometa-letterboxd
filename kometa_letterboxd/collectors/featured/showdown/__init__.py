@@ -11,7 +11,7 @@ from typing import Any, Literal
 import requests
 import yaml
 
-from kometa_letterboxd.common.config import ShowdownConfig
+from kometa_letterboxd.common.config import ShowdownConfig, resolve_path
 from kometa_letterboxd.common.kometa import build_collection_entry
 from kometa_letterboxd.common.plex import (
     build_tmdb_library_index,
@@ -24,7 +24,6 @@ from .probe import refresh_showdown_cache
 from .storage import (
     load_showdown_datasets,
     load_state,
-    resolve_path,
     save_state,
 )
 

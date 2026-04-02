@@ -55,8 +55,9 @@ def fetch_user_lists(
                 time.sleep(3)
                 ses = cloudscraper.create_scraper()
                 response = ses.get(url, timeout=timeout)
-
-            response.raise_for_status()
+                response.raise_for_status()
+            else:
+                response.raise_for_status()
 
             soup = BeautifulSoup(response.text, "html.parser")
             page_lists: list[tuple[str, str, list[str]]] = []

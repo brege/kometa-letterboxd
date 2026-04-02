@@ -9,8 +9,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from kometa_letterboxd.common.config import resolve_path
-
 
 class ShowdownState(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -90,8 +88,10 @@ def load_state(path: Path) -> ShowdownState:
     if not path.exists():
         return ShowdownState()
     with path.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
-    return ShowdownState.model_validate(data)
+        content = handle.read().strip()
+    if not content:
+        return ShowdownState()
+    return ShowdownState.model_validate(json.loads(content))
 
 
 def save_state(path: Path, data: ShowdownState) -> None:
@@ -105,14 +105,3 @@ def save_state(path: Path, data: ShowdownState) -> None:
             indent=2,
             sort_keys=True,
         )
-
-
-__all__ = [
-    "ShowdownState",
-    "load_showdown_cache",
-    "load_showdown_datasets",
-    "load_state",
-    "resolve_path",
-    "save_showdown_cache",
-    "save_state",
-]

@@ -15,7 +15,9 @@ import requests
 from bs4 import BeautifulSoup
 from requests import Session
 
-from .storage import load_showdown_cache, resolve_path, save_showdown_cache
+from kometa_letterboxd.common.config import resolve_path
+
+from .storage import load_showdown_cache, save_showdown_cache
 
 BASE_URL = "https://letterboxd.com"
 SHOWDOWN_ROOT = f"{BASE_URL}/showdown/"
