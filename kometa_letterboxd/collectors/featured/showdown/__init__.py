@@ -301,9 +301,7 @@ def _update_collection_lifecycles(
 
         current_state = collection_lifecycles.get(slug)
         if slug in selected_slugs:
-            if current_state == "spotlight":
-                collection_lifecycles[slug] = "library"
-            elif current_state is None or current_state == "retire":
+            if current_state in (None, "spotlight", "retire"):
                 collection_lifecycles[slug] = "library"
             # existing "library" state remains unchanged
         else:
@@ -399,9 +397,7 @@ def _build_collections(
             # Fallback to percentage summary
             percent = 0
             if item.total_entries > 0:
-                percent = int(
-                    round((item.available_entries / item.total_entries) * 100)
-                )
+                percent = round((item.available_entries / item.total_entries) * 100)
             summary = (
                 f"{item.available_entries}/{item.total_entries} titles owned "
                 f"({percent}%)."
@@ -465,14 +461,17 @@ def _download_background_images(
 
     # Create asset directory if needed for background images
 
-    for collection_name in collections.keys():
+    for collection_name in collections:
         # Find the dataset for this collection by matching titles
         dataset = None
         for item in datasets:
-            if isinstance(item, Mapping) and isinstance(item.get("summary"), Mapping):
-                if item["summary"].get("title") == collection_name:
-                    dataset = item
-                    break
+            if (
+                isinstance(item, Mapping)
+                and isinstance(item.get("summary"), Mapping)
+                and item["summary"].get("title") == collection_name
+            ):
+                dataset = item
+                break
 
         if not dataset:
             continue
@@ -529,10 +528,11 @@ def _write_manifest(
         manifest_data["delete_collections_named"] = list(retired_collections)
 
     path.parent.mkdir(parents=True, exist_ok=True)
+    generated_at = datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
     header_lines = [
         "# Managed by collectors.featured.showdown",
-        f"# Generated on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"# Generated on {generated_at}",
         f"# Source config: {config_source}",
         f"# Spotlight: {spotlight.title if spotlight else 'n/a'}",
         f"# Window size: {window_size} (label: {label})",

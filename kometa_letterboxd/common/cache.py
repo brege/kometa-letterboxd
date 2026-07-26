@@ -21,12 +21,12 @@ def load_lists(cache_path: str | Path) -> list[Mapping[str, Any]]:
     if isinstance(raw, dict):
         raw = raw.get("lists", [])
     if not isinstance(raw, list):
-        raise ValueError(f"Unexpected cache structure in {path}")
+        raise TypeError(f"Unexpected cache structure in {path}")
 
     result: list[Mapping[str, Any]] = []
     for entry in raw:
         if not isinstance(entry, Mapping):
-            raise ValueError(f"Unexpected cache entry in {path}")
+            raise TypeError(f"Unexpected cache entry in {path}")
         if not entry.get("title") or not entry.get("url_suffix"):
             raise ValueError(f"Incomplete cache entry in {path}")
         result.append(entry)

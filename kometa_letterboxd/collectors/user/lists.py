@@ -20,7 +20,7 @@ LIST_HREF_PATTERN = re.compile(r"^/[^/]+/list/[^/]+/$")
 
 
 def _full_url(path_fragment: str) -> str:
-    if path_fragment.startswith("http://") or path_fragment.startswith("https://"):
+    if path_fragment.startswith(("http://", "https://")):
         return path_fragment
     if not path_fragment.startswith("/"):
         path_fragment = f"/{path_fragment}"
@@ -106,7 +106,7 @@ def ensure_user_lists(
         cached = load_lists(path)
         if cached:
             # Check if cache has a dated list from the effective current month
-            today = datetime.date.today()
+            today = datetime.datetime.now().astimezone().date()
             offset_date = today + datetime.timedelta(days=days_before)
             current_month_str = offset_date.strftime("%B, %Y")
             has_current_month = any(

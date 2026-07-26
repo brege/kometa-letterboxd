@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kometa-letterboxd"
-version = "0.4"
+version = "0.5"
 description = "Generate Kometa collections from Letterboxd Showdowns and other User Lists"
 readme = "README.md"
 license = "MIT"
@@ -29,6 +29,7 @@ kometa-letterboxd = "kometa_letterboxd.main:main"
 
 [dependency-groups]
 dev = [
+  "ruff>=0.16.0",
   "ty>=0.0.18",
 ]
 
@@ -43,8 +44,7 @@ packages = ["kometa_letterboxd"]
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP"]
-ignore = ["E203"]
+extend-select = ["E", "F", "W", "I", "UP"]
 
 [tool.ruff.lint.isort]
 split-on-trailing-comma = true

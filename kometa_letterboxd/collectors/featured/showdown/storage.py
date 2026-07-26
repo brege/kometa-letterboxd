@@ -30,12 +30,12 @@ def load_showdown_datasets(path: Path) -> list[Mapping[str, Any]]:
         payload = payload.get("showdowns")
 
     if not isinstance(payload, Sequence):
-        raise ValueError(f"Unexpected showdown dataset structure in {path}")
+        raise TypeError(f"Unexpected showdown dataset structure in {path}")
 
     datasets: list[Mapping[str, Any]] = []
     for item in payload:
         if not isinstance(item, Mapping):
-            raise ValueError(f"Unexpected showdown dataset entry in {path}")
+            raise TypeError(f"Unexpected showdown dataset entry in {path}")
         datasets.append(item)
     return datasets
 
@@ -52,20 +52,20 @@ def load_showdown_cache(path: Path) -> dict[str, dict[str, Any]]:
     if isinstance(payload, dict) and "showdowns" in payload:
         raw_entries = payload.get("showdowns")
         if not isinstance(raw_entries, Sequence):
-            raise ValueError(f"Unexpected showdown cache structure in {path}")
+            raise TypeError(f"Unexpected showdown cache structure in {path}")
         entries = raw_entries
     elif isinstance(payload, Sequence):
         entries = payload
     else:
-        raise ValueError(f"Unexpected showdown cache structure in {path}")
+        raise TypeError(f"Unexpected showdown cache structure in {path}")
 
     cache: dict[str, dict[str, Any]] = {}
     for entry in entries:
         if not isinstance(entry, Mapping):
-            raise ValueError(f"Unexpected showdown cache entry in {path}")
+            raise TypeError(f"Unexpected showdown cache entry in {path}")
         summary = entry.get("summary")
         if not isinstance(summary, Mapping):
-            raise ValueError(f"Unexpected showdown cache summary in {path}")
+            raise TypeError(f"Unexpected showdown cache summary in {path}")
         slug = summary.get("slug")
         if not slug:
             raise ValueError(f"Missing showdown cache slug in {path}")

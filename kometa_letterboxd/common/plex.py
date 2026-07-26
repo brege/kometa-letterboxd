@@ -28,7 +28,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle) or {}
     if not isinstance(data, dict):
-        raise ValueError(f"Unexpected YAML structure in {path}")
+        raise TypeError(f"Unexpected YAML structure in {path}")
     return data
 
 
@@ -47,12 +47,9 @@ def resolve_plex_config(
 
     kometa_config = _load_yaml(kometa_path)
 
-    if not isinstance(kometa_config, dict):
-        raise ValueError(f"Unexpected Kometa configuration structure in {kometa_path}")
-
     plex_block_raw = kometa_config.get("plex")
     if not isinstance(plex_block_raw, dict):
-        raise ValueError(f"Kometa config '{kometa_path}' is missing a 'plex' section")
+        raise TypeError(f"Kometa config '{kometa_path}' is missing a 'plex' section")
     plex_block = cast(dict[str, Any], plex_block_raw)
 
     token = plex_block.get("token")

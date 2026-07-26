@@ -32,7 +32,11 @@ def parse_dated_list_title(title, prefix):
     if prefix and title.startswith(prefix):
         try:
             date_part_str = title[len(prefix) :].strip()
-            return datetime.datetime.strptime(date_part_str, "%B, %Y").date()
+            return (
+                datetime.datetime.strptime(date_part_str, "%B, %Y")
+                .replace(tzinfo=datetime.timezone.utc)
+                .date()
+            )
         except (ValueError, IndexError):
             return None
     return None
@@ -44,7 +48,7 @@ def get_dated_lists(all_lists, prefix, days_before=0):
         return []
 
     dated_lists_with_date = []
-    current_date = datetime.date.today()
+    current_date = datetime.datetime.now().astimezone().date()
 
     offset_date = current_date + datetime.timedelta(days=days_before)
     effective_current_month_start = offset_date.replace(day=1)
@@ -83,7 +87,7 @@ def generate_dated_collections(
     extended_extra: Mapping[str, object] | None = None,
 ):
     collections = {}
-    current_date = datetime.date.today()
+    current_date = datetime.datetime.now().astimezone().date()
     offset_date = current_date + datetime.timedelta(days=days_before)
     effective_current_month_start = offset_date.replace(day=1)
 

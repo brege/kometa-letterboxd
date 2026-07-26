@@ -1,5 +1,6 @@
 import argparse
 import os
+from importlib.metadata import version
 from pathlib import Path
 
 import yaml
@@ -25,6 +26,12 @@ def parse_args():
     )
     parser.add_argument("-c", "--config", help="path to configuration file")
     parser.add_argument("-d", "--data", help="path to data directory for caches")
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"%(prog)s {version('kometa-letterboxd')}",
+    )
     return parser.parse_args()
 
 

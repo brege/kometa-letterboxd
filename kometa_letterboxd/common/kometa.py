@@ -90,7 +90,7 @@ def write_collections_section(
         raise FileNotFoundError(f"Kometa config file not found at {output_path}")
 
     if not isinstance(file_data, dict):
-        raise ValueError(f"Kometa config at {output_path} must be a mapping")
+        raise TypeError(f"Kometa config at {output_path} must be a mapping")
 
     # Replace the collections section entirely with the freshly generated mapping.
     file_data["collections"] = dict(collections)
@@ -100,7 +100,7 @@ def write_collections_section(
     else:
         file_data.pop("delete_collections_named", None)
 
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
     config_name = Path(config_source).name
 
     try:
